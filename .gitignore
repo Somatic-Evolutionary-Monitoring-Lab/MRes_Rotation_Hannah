@@ -2,3 +2,7 @@
 data/
 .Rproj.user
 *.Rproj
+.RData
+.Rhistory
+.Rapp.history
+.Rproj.user/
