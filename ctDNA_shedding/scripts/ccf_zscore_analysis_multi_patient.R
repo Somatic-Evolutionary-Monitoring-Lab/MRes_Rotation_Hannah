@@ -262,8 +262,6 @@ ggsave(paste0(outputs.folder, "consistent_shedding_per_patient.pdf"),
 
 
 
-
-
 ###############################################################
 #### Mean CCF z-score with 95% CI per patient per sample   ####
 ###############################################################
@@ -277,9 +275,10 @@ ci_summary <- ctDNA_data_pos_multiple %>%
     ci_lower  = mean_z - 1.96 * se,
     ci_upper  = mean_z + 1.96 * se,
     .groups = "drop"
-  )
+  ) %>% 
+  mutate(sample_label = mapply(function(p, s) gsub(paste0(p, "_"), "", s), patient_name, sample))
 
-ggplot(ci_summary, aes(x = sample, y = mean_z, colour = patient_name)) +
+ggplot(ci_summary, aes(x = sample_label, y = mean_z, colour = patient_name)) +
   geom_point(size = 2) +
   geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.3) +
   geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
@@ -292,6 +291,130 @@ ggplot(ci_summary, aes(x = sample, y = mean_z, colour = patient_name)) +
 
 ggsave(paste0(outputs.folder, "mean_ccf_zscore_CI_per_patient.pdf"),
        width = 16, height = 16)
+
+
+
+##########################################################################
+#### Finding mutations that have consistently higher/lower shedding   ####
+##########################################################################
+
+# Group mutations per patient
+mutation_mean_z <- ctDNA_data_pos_multiple %>% 
+  group_by(patient_name, Pos) %>% 
+  summarise(
+    n_samples = n(),
+    mean_z = mean(ccf_z_score),
+    .groups = "drop"
+  )
+
+# Count number of samples each patient has
+patient_sample_counts <- ctDNA_data_pos_multiple %>%
+  group_by(patient_name) %>%
+  summarise(total_samples = n_distinct(sample), .groups = "drop")
+
+# Compute patient order (those with most outlier mutations first)
+patient_order <- mutation_mean_z %>% 
+  mutate(is_outlier = case_when(
+    mean_z > 1.96 ~ TRUE,
+    mean_z < -1.96 ~ TRUE,
+    TRUE ~ FALSE
+  )) %>% 
+  group_by(patient_name) %>% 
+  summarise(n_outliers = sum(is_outlier)) %>% 
+  arrange(desc(n_outliers)) %>% 
+  pull(patient_name)
+
+# Make multipage PDF plots
+pdf(paste0(outputs.folder, "mutation_mean_zscore_per_patient.pdf"), 
+    width = 12, height = 6)
+
+for (pat in patient_order) {
+  
+  # Categorise mutations by shedding status
+  pat_data <- mutation_mean_z %>%
+    filter(patient_name == pat) %>% 
+    mutate(shedding_status = case_when(
+      mean_z > 1.96  ~ "High",
+      mean_z < -1.96 ~ "Low",
+      TRUE           ~ "Normal"
+    ))
+  
+  # Plot
+  p <- ggplot(pat_data, aes(x = reorder(Pos, -mean_z), y = mean_z, colour = shedding_status)) +
+    geom_point(size = 2) + 
+    theme_cowplot() +
+    geom_hline(yintercept = -1.96, linetype = "dotted", colour = "grey40") +
+    geom_hline(yintercept =  1.96, linetype = "dotted", colour = "grey40") +
+    geom_hline(yintercept =  0,    linetype = "dashed",  colour = "black") +
+    scale_colour_manual(values = c(
+      "High"   = "#D7191C",
+      "Low"    = "#2C7BB6",
+      "Normal" = "grey60"
+    )) +
+    labs(
+      x        = "Mutation",
+      y        = "Mean z-score across samples",
+      colour   = "Shedding status",
+      title    = paste0("CCF z-scores for patient ", pat),
+      subtitle = paste0("n mutations = ", nrow(pat_data),
+                        " ; n samples = ",
+                        patient_sample_counts$total_samples[patient_sample_counts$patient_name == pat])) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 6))
+  
+  print(p)
+}
+
+dev.off()
+
+# Save outlier mutations as csv
+outlier_mutations <- mutation_mean_z %>%
+  mutate(shedding_status = case_when(
+    mean_z > 1.96  ~ "High",
+    mean_z < -1.96 ~ "Low",
+    TRUE           ~ "Normal"
+  )) %>%
+  filter(shedding_status != "Normal") %>%
+  arrange(patient_name, desc(abs(mean_z)))
+
+write.csv(outlier_mutations, 
+          file = paste0(outputs.folder, "outlier_mutations.csv"), 
+          row.names = FALSE)
+
+# Save as BED file for later nucleosome mapping
+outlier_bed <- outlier_mutations %>%
+  tidyr::separate(Pos, into = c("chr_num", "pos", "ref", "alt"), sep = ":", remove = FALSE) %>%
+  mutate(
+    chr   = paste0("chr", chr_num),
+    start = as.numeric(pos) - 1,  # BED is 0-based
+    end   = as.numeric(pos)
+  ) %>%
+  select(chr, start, end, Pos, patient_name, shedding_status, mean_z)
+
+outlier_bed_path <- paste0(outputs.folder, "outlier_mutations.bed")
+write.table(outlier_bed, file = outlier_bed_path, 
+            sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
