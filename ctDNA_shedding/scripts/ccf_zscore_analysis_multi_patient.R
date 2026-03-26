@@ -136,14 +136,14 @@ ctDNA_top10 <- ctDNA_top10 %>%
 patient_plots <- lapply(top10_patients, function(pat) {
   
   pat_data <- ctDNA_top10 %>% filter(patient_name == pat)
-  samples <- unique(pat_data$sample)
+  samples <- pat_data %>% arrange(days_post_surgery) %>% pull(sample) %>% unique()
   
   # One histogram per sample
   sample_plots <- lapply(samples, function(samp) {
     samp_data <- pat_data %>% filter(sample == samp)
     
-    # Shorten sample label for plot title
-    samp_label <- gsub(paste0(pat, "_"), "", samp)
+    # Make sample label days post surgery
+    samp_label <- paste0(unique(samp_data$days_post_surgery), " days post surgery")
     
     ggplot(samp_data, aes(x = ccf_z_score)) +
       geom_histogram(binwidth = 0.3, fill = "#2C7BB6", colour = "white", alpha = 0.8) +
@@ -267,29 +267,28 @@ ggsave(paste0(outputs.folder, "consistent_shedding_per_patient.pdf"),
 ###############################################################
 
 ci_summary <- ctDNA_data_pos_multiple %>%
-  group_by(patient_name, sample) %>%
+  group_by(patient_name, sample, days_post_surgery) %>%
   summarise(
-    n         = n(),
-    mean_z    = mean(ccf_z_score),
-    se        = sd(ccf_z_score) / sqrt(n),
-    ci_lower  = mean_z - 1.96 * se,
-    ci_upper  = mean_z + 1.96 * se,
-    .groups = "drop"
-  ) %>% 
-  mutate(sample_label = mapply(function(p, s) gsub(paste0(p, "_"), "", s), patient_name, sample))
+    n        = n(),
+    mean_ccf = mean(ccf),
+    se       = sd(ccf) / sqrt(n),
+    ci_lower = mean_ccf - 1.96 * se,
+    ci_upper = mean_ccf + 1.96 * se,
+    .groups  = "drop"
+  )
 
-ggplot(ci_summary, aes(x = sample_label, y = mean_z, colour = patient_name)) +
+ggplot(ci_summary, aes(x = factor(days_post_surgery), y = mean_ccf, colour = patient_name)) +
   geom_point(size = 2) +
   geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.3) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_hline(yintercept = 1, linetype = "dashed", colour = "grey40") +
   facet_wrap(~ patient_name, scales = "free_x") +
   theme_cowplot(font_size = 8) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 6),
         legend.position = "none") +
-  labs(x = "Sample", y = "Mean CCF z-score",
-       title = "Mean CCF z-score ± 95% CI per patient per sample")
+  labs(x = "Days post surgery", y = "Mean CCF",
+       title = "Mean CCF ± 95% CI per patient per sample")
 
-ggsave(paste0(outputs.folder, "mean_ccf_zscore_CI_per_patient.pdf"),
+ggsave(paste0(outputs.folder, "mean_ccf_CI_per_patient.pdf"),
        width = 16, height = 16)
 
 
@@ -396,27 +395,158 @@ write.table(outlier_bed, file = outlier_bed_path,
 
 
 
+################################################################
+#### Plot the violin style plot for three 6-sample patients ####
+################################################################
+
+# Convert patient name to factor for plotting
+ctDNA_data_pos_multiple_violin <- ctDNA_data_pos_multiple
+ctDNA_data_pos_multiple_violin$patient <- as.factor(ctDNA_data_pos_multiple_violin$patient)
+
+# Plot only for patients with 6 samples (for now)
+ctDNA_data_pos_multiple_violin_6_samples <- ctDNA_data_pos_multiple_violin %>% 
+  filter(patient %in% c("LTX208", "LTX287", "LTX854"))
+
+# Compute the Wilcoxon signed-rank test per mutation to test whether its 
+# CCF z-scores are systematically different from 0 across all 6 samples
+mutation_summary <- ctDNA_data_pos_multiple_violin_6_samples %>% 
+  group_by(patient, Pos) %>% 
+  summarise(
+    mean_z = mean(ccf_z_score),
+    se_z = sd(ccf_z_score) / sqrt(n()),
+    ci_lower = mean_z - 1.96 * se_z,
+    ci_upper = mean_z + 1.96 * se_z,
+    mut_p_value = wilcox.test(ccf_z_score, mu = 0)$p.value,
+    .groups = "drop"
+  ) %>% 
+  mutate(sig = mut_p_value < 0.05)
+
+# Plotting
+pos <- position_jitter(width = 0.25, seed = 42)
+
+ggplot(mutation_summary, aes(x = patient, y = mean_z, colour = sig)) +
+  
+  geom_violin(fill = "grey90", colour = "grey60", width = 0.8) +
+  
+  # Non-significant points
+  geom_point(data = filter(mutation_summary, sig == FALSE),
+             position = pos, size = 1.2, alpha = 0.6) +
+  
+  # Significant points + errorbars
+  geom_point(data = filter(mutation_summary, sig == TRUE),
+             position = pos, size = 1.6, alpha = 1) +
+  
+  geom_errorbar(data = filter(mutation_summary, sig == TRUE),
+                aes(ymin = ci_lower, ymax = ci_upper),
+                position = pos,
+                width = 0.02,
+                linewidth = 0.4) +
+  
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  scale_colour_manual(
+    values = c("FALSE" = "grey50", "TRUE" = "#D7191C"),
+    labels = c("Not significant", "Significant"),
+    name = "Z ≠ 0"
+  ) +
+  labs(x = "Patient", y = "Mean CCF z-score") +
+  theme_cowplot() +
+  theme(
+    legend.position = "top",
+    axis.text = element_text(size = 11),
+    axis.title = element_text(size = 14)
+  ) +
+  ggtitle("CCF z-score distribution per patient (6-sample patients)")
+
+ggsave(paste0(outputs.folder, "ccf_zscore_violin.pdf"),
+       width = 8, height = 6)
+
+# Examine the significant mutations from those 6-sample patients ####
+sig_mutations_6sample <- filter(mutation_summary, sig == TRUE)
+
+########################################################
+#### Save the final ctDNA dataset with CCF z-scores ####
+########################################################
+
+# Add sig_6samples column to the full dataset
+ctDNA_data_pos_multiple <- ctDNA_data_pos_multiple %>%
+  mutate(sig_6samples = paste(patient, Pos, sep = "_") %in% 
+           paste(sig_mutations_6sample$patient, sig_mutations_6sample$Pos, sep = "_"))
+
+table(ctDNA_data_pos_multiple$sig_6samples)
+
+write_fst(ctDNA_data_pos_multiple, paste0(outputs.folder, "ctDNA_data_pos_multiple.fst"))
 
 
+###########################################################################################
+#### Spearman correlations between two samples for subset of patients with two samples ####
+###########################################################################################
 
+# Find patients with exactly 2 samples
+patients_2samples <- ctDNA_data_pos_multiple %>%
+  group_by(patient) %>%
+  summarise(n_samples = n_distinct(sample), .groups = "drop") %>%
+  filter(n_samples == 2) %>%
+  pull(patient)
 
+# Take up to 16 patients
+patients_2samples_16 <- head(patients_2samples, 16)
 
+# For each patient, pivot to wide format (one col per sample) and compute Spearman
+spearman_plots <- lapply(patients_2samples_16, function(pat) {
+  
+  pat_data <- ctDNA_data_pos_multiple %>%
+    filter(patient == pat)
+  
+  # Get the two sample names, ordered by days post surgery
+  two_samples <- pat_data %>%
+    distinct(sample, days_post_surgery) %>%
+    arrange(days_post_surgery) %>%
+    pull(sample)
+  
+  s1 <- two_samples[1]
+  s2 <- two_samples[2]
+  
+  # Pivot wide so each row is a mutation with z-scores for both samples
+  wide <- pat_data %>%
+    filter(sample %in% c(s1, s2)) %>%
+    select(Pos, sample, ccf_z_score) %>%
+    pivot_wider(names_from = sample, values_from = ccf_z_score) %>%
+    drop_na()
+  
+  # Rename columns
+  colnames(wide)[2:3] <- c("z_s1", "z_s2")
+  
+  # Spearman correlation
+  spear <- cor.test(wide$z_s1, wide$z_s2, method = "spearman")
+  rho   <- round(spear$estimate, 3)
+  p_val <- signif(spear$p.value, 3)
+  p_label <- ifelse(p_val < 0.001, "p < 0.001", paste0("p = ", p_val))
+  
+  # Days post surgery labels for axis titles
+  days_s1 <- pat_data %>% filter(sample == s1) %>% pull(days_post_surgery) %>% unique()
+  days_s2 <- pat_data %>% filter(sample == s2) %>% pull(days_post_surgery) %>% unique()
+  
+  ggplot(wide, aes(x = z_s1, y = z_s2)) +
+    geom_point(size = 1.2, alpha = 0.6, colour = "grey40") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey60") +
+    annotate("text",
+             x = min(wide$z_s1, na.rm = TRUE),
+             y = max(wide$z_s2, na.rm = TRUE),
+             label = paste0("rho = ", rho, "\n", p_label),
+             hjust = 0, vjust = 1, size = 2.5) +
+    theme_cowplot(font_size = 8) +
+    labs(
+      x     = paste0("CCF z-score (", days_s1, " days)"),
+      y     = paste0("CCF z-score (", days_s2, " days)"),
+      title = pat
+    )
+})
 
+# Combine into 4x4 grid
+final_spearman_grid <- plot_grid(plotlist = spearman_plots, ncol = 4, nrow = 4)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ggsave(paste0(outputs.folder, "spearman_2sample_patients_4x4.pdf"),
+       final_spearman_grid, width = 16, height = 16)
 
 
 

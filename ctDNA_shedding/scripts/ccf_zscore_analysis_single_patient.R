@@ -75,7 +75,7 @@ ctDNA_data_pos_multiple <- ctDNA_data_pos %>%
   filter(n() >= 2) %>% 
   ungroup()
 
-n_patients_multiple <- length(unique(ctDNA_data_pos_twice$patient))
+n_patients_multiple <- length(unique(ctDNA_data_pos_multiple$patient))
 
 
 
@@ -231,6 +231,35 @@ ggplot(LTX063_merged, aes(x = ccf_z_score_s1, y = ccf_z_score_s2, colour = categ
 ggsave(paste0(outputs.folder, "LTX063_zscore_scatter.pdf"), width = 7, height = 6)
 
 
+
+
+####################################################################################
+#### Correlation between CCF z-scores from sample 1 and sample 2 in one patient ####
+####################################################################################
+
+# Calculate Spearman correlation
+spearman_result <- cor.test(LTX063_merged$ccf_z_score_s1, LTX063_merged$ccf_z_score_s2, 
+                            method = "spearman")
+
+rho <- round(spearman_result$estimate, 3)
+p_val <- signif(spearman_result$p.value, 3)
+
+# Format p-value label
+p_label <- ifelse(p_val < 0.001, "p < 0.001", paste0("p = ", p_val))
+
+ggplot(LTX063_merged, aes(x = ccf_z_score_s1, y = ccf_z_score_s2)) +
+  geom_point(alpha = 0.7, size = 2, colour = "grey40") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey60") +
+  annotate("text", 
+           x = min(LTX063_merged$ccf_z_score_s1, na.rm = TRUE), 
+           y = max(LTX063_merged$ccf_z_score_s2, na.rm = TRUE),
+           label = paste0("rho = ", rho, "\n", p_label),
+           hjust = 0, vjust = 1, size = 4) +
+  theme_cowplot() +
+  labs(x = "CCF z-score (Sample 1)", y = "CCF z-score (Sample 2)",
+       title = "CCF z-scores across two timepoints (LTX063)")
+
+ggsave(paste0(outputs.folder, "LTX063_zscore_scatter_spearman.pdf"), width = 7, height = 6)
 
 
 
