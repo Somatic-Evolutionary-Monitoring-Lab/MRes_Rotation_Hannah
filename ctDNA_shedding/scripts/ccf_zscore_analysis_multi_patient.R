@@ -132,49 +132,50 @@ ctDNA_top10 <- ctDNA_top10 %>%
 #### Plot z-score histograms: rows = patients, cols = samples ####
 ##################################################################
 
-# Create a list of plots, one per patient
 patient_plots <- lapply(top10_patients, function(pat) {
   
-  pat_data <- ctDNA_top10 %>% filter(patient_name == pat)
+  pat_data <- ctDNA_top10 %>% filter(patient == pat)
   samples <- pat_data %>% arrange(days_post_surgery) %>% pull(sample) %>% unique()
+  samples <- head(samples, 6)  # cap at 6
   
-  # One histogram per sample
   sample_plots <- lapply(samples, function(samp) {
     samp_data <- pat_data %>% filter(sample == samp)
     
-    # Make sample label days post surgery
     samp_label <- paste0(unique(samp_data$days_post_surgery), " days post surgery")
     
     ggplot(samp_data, aes(x = ccf_z_score)) +
       geom_histogram(binwidth = 0.3, fill = "#2C7BB6", colour = "white", alpha = 0.8) +
       geom_vline(xintercept = 0, linetype = "dashed", colour = "black") +
-      geom_vline(xintercept = c(-1.96, 1.96), linetype = "dotted", colour = "red") +
-      xlim(-4, 4) +  # fixed x-axis across all panels
-      theme_cowplot(font_size = 8) +
+      xlim(-3, 3) +
+      theme_cowplot(font_size = 12) +
       labs(x = "CCF z-score", y = "Count", title = samp_label)
   })
   
-  # Pad with empty plots if fewer than 6 samples
-  max_samples <- 6
-  if (length(sample_plots) < max_samples) {
-    empty <- replicate(max_samples - length(sample_plots), 
-                       ggplot() + theme_void(), 
+  # Pad to max 6 panels
+  if (length(sample_plots) < 6) {
+    empty <- replicate(6 - length(sample_plots),
+                       ggplot() + theme_void(),
                        simplify = FALSE)
     sample_plots <- c(sample_plots, empty)
   }
   
-  # Combine samples into one row, with patient label on left
-  row <- plot_grid(plotlist = sample_plots, nrow = 1)
-  title <- ggdraw() + draw_label(pat, fontface = "bold", x = 0, hjust = 0, size = 10)
+  row   <- plot_grid(plotlist = sample_plots, nrow = 1)
+  title <- ggdraw() + draw_label(paste0("Patient ", pat),
+                                 fontface = "bold", x = 0.01, hjust = 0, size = 14)
   plot_grid(title, row, ncol = 1, rel_heights = c(0.1, 1))
 })
 
-# Stack all patient rows
-final_plot <- plot_grid(plotlist = patient_plots, ncol = 1)
+# Add overall title
+overall_title <- ggdraw() +
+  draw_label("CCF z-score histograms - Black et al. 2025",
+             fontface = "bold", size = 16, x = 0.5, hjust = 0.5)
+
+final_plot <- plot_grid(overall_title,
+                        plot_grid(plotlist = patient_plots, ncol = 1),
+                        ncol = 1, rel_heights = c(0.02, 1))
 
 ggsave(paste0(outputs.folder, "top10_patients_zscore_histograms.pdf"),
        final_plot, width = 18, height = 20)
-
 
 ######################################################################################
 #### Analysis 2: Identify consistently low/high shedding mutations across samples ####
@@ -491,13 +492,11 @@ patients_2samples <- ctDNA_data_pos_multiple %>%
 # Take up to 16 patients
 patients_2samples_16 <- head(patients_2samples, 16)
 
-# For each patient, pivot to wide format (one col per sample) and compute Spearman
 spearman_plots <- lapply(patients_2samples_16, function(pat) {
   
   pat_data <- ctDNA_data_pos_multiple %>%
     filter(patient == pat)
   
-  # Get the two sample names, ordered by days post surgery
   two_samples <- pat_data %>%
     distinct(sample, days_post_surgery) %>%
     arrange(days_post_surgery) %>%
@@ -506,35 +505,37 @@ spearman_plots <- lapply(patients_2samples_16, function(pat) {
   s1 <- two_samples[1]
   s2 <- two_samples[2]
   
-  # Pivot wide so each row is a mutation with z-scores for both samples
   wide <- pat_data %>%
     filter(sample %in% c(s1, s2)) %>%
     select(Pos, sample, ccf_z_score) %>%
     pivot_wider(names_from = sample, values_from = ccf_z_score) %>%
     drop_na()
   
-  # Rename columns
   colnames(wide)[2:3] <- c("z_s1", "z_s2")
   
-  # Spearman correlation
-  spear <- cor.test(wide$z_s1, wide$z_s2, method = "spearman")
-  rho   <- round(spear$estimate, 3)
-  p_val <- signif(spear$p.value, 3)
+  spear   <- cor.test(wide$z_s1, wide$z_s2, method = "spearman")
+  rho     <- round(spear$estimate, 3)
+  p_val   <- signif(spear$p.value, 3)
   p_label <- ifelse(p_val < 0.001, "p < 0.001", paste0("p = ", p_val))
+  sig     <- spear$p.value < 0.05
   
-  # Days post surgery labels for axis titles
+  point_colour <- ifelse(sig, "#0C447C", "grey70")
+  title_colour <- ifelse(sig, "black", "grey60")
+  
   days_s1 <- pat_data %>% filter(sample == s1) %>% pull(days_post_surgery) %>% unique()
   days_s2 <- pat_data %>% filter(sample == s2) %>% pull(days_post_surgery) %>% unique()
   
   ggplot(wide, aes(x = z_s1, y = z_s2)) +
-    geom_point(size = 1.2, alpha = 0.6, colour = "grey40") +
-    geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey60") +
+    geom_point(size = 1.2, alpha = 0.65, colour = point_colour) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey70") +
     annotate("text",
              x = min(wide$z_s1, na.rm = TRUE),
              y = max(wide$z_s2, na.rm = TRUE),
              label = paste0("rho = ", rho, "\n", p_label),
-             hjust = 0, vjust = 1, size = 2.5) +
-    theme_cowplot(font_size = 8) +
+             hjust = 0, vjust = 1, size = 3,
+             colour = point_colour) +
+    theme_cowplot(font_size = 10) +
+    theme(plot.title = element_text(colour = title_colour)) +
     labs(
       x     = paste0("CCF z-score (", days_s1, " days)"),
       y     = paste0("CCF z-score (", days_s2, " days)"),
@@ -542,11 +543,16 @@ spearman_plots <- lapply(patients_2samples_16, function(pat) {
     )
 })
 
-# Combine into 4x4 grid
-final_spearman_grid <- plot_grid(plotlist = spearman_plots, ncol = 4, nrow = 4)
+overall_title <- ggdraw() +
+  draw_label("Spearman correlations between timepoints - Black et al. 2025",
+             fontface = "bold", size = 16, x = 0.5, hjust = 0.5)
+
+final_spearman_grid <- plot_grid(overall_title,
+                                 plot_grid(plotlist = spearman_plots, ncol = 4, nrow = 4),
+                                 ncol = 1, rel_heights = c(0.03, 1))
 
 ggsave(paste0(outputs.folder, "spearman_2sample_patients_4x4.pdf"),
-       final_spearman_grid, width = 16, height = 16)
+       final_spearman_grid, width = 10, height = 10)
 
 
 

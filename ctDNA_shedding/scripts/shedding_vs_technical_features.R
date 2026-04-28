@@ -64,7 +64,6 @@ mutation_correlation_data <- ctDNA_data_pos_multiple %>%
     mean_z            = mean(ccf_z_score, na.rm = TRUE),
     avg_major_cn      = mean(major_cn_mean, na.rm = TRUE),
     avg_multiplicity  = mean(mean_multiplicity, na.rm = TRUE),
-    cv_depth          = sd(Depth, na.rm = TRUE) / mean(Depth, na.rm = TRUE),
     avg_depth         = mean(Depth, na.rm = TRUE),
     tnc               = first(tnc_type),
     .groups = "drop"
@@ -73,7 +72,7 @@ mutation_correlation_data <- ctDNA_data_pos_multiple %>%
 # Define function to calculate correlation for plot labels
 get_corr_label <- function(df, var_x) {
   res <- cor.test(df[[var_x]], df$mean_z, method = "spearman")
-  paste0("rho = ", round(res$estimate, 3), " ; p = ", round(res$p.value, 4))
+  paste0("rho = ", round(res$estimate, 3), " ; p = ", signif(res$p.value, 3))
 }
 
 #------------------------------------------------------------------------------#
@@ -105,16 +104,16 @@ p_cn <- ggplot(mutation_correlation_data, aes(x = avg_major_cn, y = mean_z)) +
   )
 
 #------------------------------------------------------------------------------#
-# PLOT C: Correlation with Depth Stability (CV)
+# PLOT C: Correlation with Depth
 #------------------------------------------------------------------------------#
-p_cv <- ggplot(mutation_correlation_data, aes(x = cv_depth, y = mean_z)) +
+p_depth <- ggplot(mutation_correlation_data, aes(x = avg_depth, y = mean_z)) +
   geom_point(alpha = 0.2, colour = "grey30") +
   geom_smooth(method = "lm", colour = "#D7191C", fill = "pink") +
   theme_cowplot() +
   labs(
-    title = "Shedding vs depth stability",
-    subtitle = get_corr_label(mutation_correlation_data, "cv_depth"),
-    x = "CV of depth (SD/mean)",
+    title = "Shedding vs depth",
+    subtitle = get_corr_label(mutation_correlation_data, "avg_depth"),
+    x = "Depth",
     y = "Mean CCF z-score"
   )
 
@@ -131,7 +130,7 @@ p_tnc <- ggplot(mutation_correlation_data, aes(x = reorder(tnc, mean_z, FUN = me
 #------------------------------------------------------------------------------#
 # Combine and save
 #------------------------------------------------------------------------------#
-rule_out_2x2_plots <- plot_grid(p_mult, p_cn, p_cv, p_tnc, ncol = 2, align = "hv")
+rule_out_2x2_plots <- plot_grid(p_mult, p_cn, p_depth, p_tnc, ncol = 2, align = "hv")
 
 ggsave(paste0(outputs.folder, "shedding_vs_technical_features.pdf"),
        rule_out_2x2_plots, width = 12, height = 10)
@@ -140,11 +139,10 @@ ggsave(paste0(outputs.folder, "shedding_vs_technical_features.pdf"),
 # Final correlation table
 #==============================================================================#
 cor_results <- data.frame(
-  Variable = c("Major_CN", "Multiplicity", "CV_Depth", "Avg_Depth"),
+  Variable = c("Major_CN", "Multiplicity", "Avg_Depth"),
   Spearman_Rho = c(
     cor(mutation_correlation_data$avg_major_cn, mutation_correlation_data$mean_z, method = "spearman"),
     cor(mutation_correlation_data$avg_multiplicity, mutation_correlation_data$mean_z, method = "spearman"),
-    cor(mutation_correlation_data$cv_depth, mutation_correlation_data$mean_z, method = "spearman", use = "complete.obs"),
     cor(mutation_correlation_data$avg_depth, mutation_correlation_data$mean_z, method = "spearman")
   )
 )

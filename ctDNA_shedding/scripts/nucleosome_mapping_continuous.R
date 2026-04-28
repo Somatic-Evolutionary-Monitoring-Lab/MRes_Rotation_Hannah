@@ -3,7 +3,7 @@
 ######                                                                    ######
 ######  Map high/low shedding mutations to nucleosome position map        ######
 ######  using different nucleosome maps: lung cancer cfDNA, healthy       ######
-######  young and healthy old                                             ######
+######  young and healthy old, B cell MNase-seq                           ######
 ######                                                                    ######
 #==============================================================================#
 #==============================================================================#
@@ -70,6 +70,12 @@ nucleosome_map_path_healthy_70yo <- "data/GSE114511_70yo_Teo_cfDNA_stable_100bp.
 nuc_healthy_70yo <- data.table::fread(nucleosome_map_path_healthy_70yo)
 colnames(nuc_healthy_70yo) <- c("chr", "start", "end", "nuc_occupancy", "sd", "rel_deviation")
 head(nuc_healthy_70yo)
+
+# Read in nucleosome map - B CELL MNASE-SEQ GAFFNEY ET AL. 2012
+nucleosome_map_path_bcell <- "data/GSE36979_Gaffney2012_Bcells_MNase-seq_stable_100bp_hg19.bed"
+nuc_bcell <- data.table::fread(nucleosome_map_path_bcell)
+colnames(nuc_bcell) <- c("chr", "start", "end", "nuc_occupancy", "sd", "rel_deviation")
+head(nuc_bcell)
 
 # Read in clinical features
 clinical <- read.delim("data/tx842_clinical_outcome_20251211.tsv")
@@ -198,21 +204,42 @@ cor_test_70yo <- cor.test(mutation_summary_all_nuc_70yo$mean_z,
                           alternative = "two.sided",
                           method = "spearman")
 
+################################################################################################
+#### Does CCF z-score correlate with nucleosome occupancy? B CELL, GAFFNEY ET AL. 2012      ####
+################################################################################################
+
+mutation_summary_all_nuc_bcell <- mutation_summary_all %>%
+  mutate(nuc_occupancy = mapply(function(c, p) {
+    idx <- which(nuc_bcell$chr == c & nuc_bcell$start <= p & nuc_bcell$end > p)
+    if (length(idx) > 0) nuc_bcell$nuc_occupancy[idx[1]] else NA
+  }, chr, pos))
+
+cat("B cell - Mutations with nucleosome occupancy:", sum(!is.na(mutation_summary_all_nuc_bcell$nuc_occupancy)), "\n")
+cat("B cell - Mutations without (unstable regions):", sum(is.na(mutation_summary_all_nuc_bcell$nuc_occupancy)), "\n")
+cat("B cell - Proportion covered:", round(mean(!is.na(mutation_summary_all_nuc_bcell$nuc_occupancy)) * 100, 1), "%\n")
+
+cor_test_bcell <- cor.test(mutation_summary_all_nuc_bcell$mean_z,
+                          mutation_summary_all_nuc_bcell$nuc_occupancy,
+                          alternative = "two.sided",
+                          method = "spearman")
+
 
 ################################################################################################
-#### Multi-panel plot: all three nucleosome maps                                            ####
+#### Multi-panel plot: all nucleosome maps                                            ####
 ################################################################################################
 
 # Get shared axis limits
 all_occ <- c(
   mutation_summary_all_nuc_lung_ma$nuc_occupancy,
   mutation_summary_all_nuc_25yo$nuc_occupancy,
-  mutation_summary_all_nuc_70yo$nuc_occupancy
+  mutation_summary_all_nuc_70yo$nuc_occupancy,
+  mutation_summary_all_nuc_bcell$nuc_occupancy
 )
 all_z <- c(
   mutation_summary_all_nuc_lung_ma$mean_z,
   mutation_summary_all_nuc_25yo$mean_z,
-  mutation_summary_all_nuc_70yo$mean_z
+  mutation_summary_all_nuc_70yo$mean_z,
+  mutation_summary_all_nuc_bcell$mean_z
 )
 
 x_lim <- range(all_occ, na.rm = TRUE)
@@ -261,15 +288,29 @@ p_70yo <- mutation_summary_all_nuc_70yo %>%
        title = "Healthy 70yo cfDNA (Teo et al. 2018)") +
   theme_cowplot(font_size = 11)
 
-# Combine into one figure
-multi_panel <- plot_grid(p_lung, p_25yo, p_70yo, ncol = 3, labels = c("A", "B", "C"))
+p_bcell <- mutation_summary_all_nuc_bcell %>%
+  filter(!is.na(nuc_occupancy)) %>%
+  ggplot(aes(x = nuc_occupancy, y = mean_z)) +
+  geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
+  geom_smooth(method = "lm", colour = "#762A83", se = TRUE) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
+  coord_cartesian(xlim = x_lim, ylim = y_lim) +
+  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
+           label = paste0("rho = ", round(cor_test_bcell$estimate, 3),
+                          "\np = ", round(cor_test_bcell$p.value, 3)), size = 3.5) +
+  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
+       title = "B cell MNase-seq (Gaffney et al. 2012)") +
+  theme_cowplot(font_size = 11)
 
-ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_three_maps.pdf"),
-       multi_panel, width = 18, height = 6)
+# Combine into one figure
+multi_panel <- plot_grid(p_lung, p_25yo, p_70yo, p_bcell, ncol = 2, labels = c("A", "B", "C", "D"))
+
+ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_all_maps.pdf"),
+       multi_panel, width = 10, height = 10)
 
 
 ################################################################################################
-#### Multi-panel plot: all three nucleosome maps for mutations significantly different      ####
+#### Multi-panel plot: all nucleosome maps for mutations significantly different            ####
 #### CCF z-score distribution to 0 across 6 samples (from 3 patients)                       ####
 ################################################################################################
 
@@ -277,15 +318,17 @@ ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_three_maps.pdf"),
 sig_lung <- mutation_summary_all_nuc_lung_ma %>% filter(sig_6samples == TRUE, !is.na(nuc_occupancy))
 sig_25yo <- mutation_summary_all_nuc_25yo %>% filter(sig_6samples == TRUE, !is.na(nuc_occupancy))
 sig_70yo <- mutation_summary_all_nuc_70yo %>% filter(sig_6samples == TRUE, !is.na(nuc_occupancy))
+sig_bcell <- mutation_summary_all_nuc_bcell %>% filter(sig_6samples == TRUE, !is.na(nuc_occupancy))
 
 # Correlation tests
 cor_sig_lung <- cor.test(sig_lung$mean_z, sig_lung$nuc_occupancy, alternative = "two.sided", method = "spearman")
 cor_sig_25yo <- cor.test(sig_25yo$mean_z, sig_25yo$nuc_occupancy, alternative = "two.sided", method = "spearman")
 cor_sig_70yo <- cor.test(sig_70yo$mean_z, sig_70yo$nuc_occupancy, alternative = "two.sided", method = "spearman")
+cor_sig_bcell <- cor.test(sig_bcell$mean_z, sig_bcell$nuc_occupancy, alternative = "two.sided", method = "spearman")
 
 # Shared axis limits
-sig_occ <- c(sig_lung$nuc_occupancy, sig_25yo$nuc_occupancy, sig_70yo$nuc_occupancy)
-sig_z <- c(sig_lung$mean_z, sig_25yo$mean_z, sig_70yo$mean_z)
+sig_occ <- c(sig_lung$nuc_occupancy, sig_25yo$nuc_occupancy, sig_70yo$nuc_occupancy, sig_bcell$nuc_occupancy)
+sig_z <- c(sig_lung$mean_z, sig_25yo$mean_z, sig_70yo$mean_z, sig_bcell$mean_z)
 x_lim_sig <- range(sig_occ, na.rm = TRUE)
 y_lim_sig <- range(sig_z, na.rm = TRUE)
 
@@ -329,10 +372,23 @@ p_sig_70yo <- ggplot(sig_70yo, aes(x = nuc_occupancy, y = mean_z)) +
        title = "Healthy 70yo cfDNA (Teo et al. 2018)") +
   theme_cowplot(font_size = 11)
 
-multi_panel_sig <- plot_grid(p_sig_lung, p_sig_25yo, p_sig_70yo, ncol = 3, labels = c("A", "B", "C"))
+p_sig_bcell <- ggplot(sig_bcell, aes(x = nuc_occupancy, y = mean_z)) +
+  geom_point(alpha = 0.5, size = 1.5, colour = "grey40") +
+  geom_smooth(method = "lm", colour = "#762A83", se = TRUE) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
+  coord_cartesian(xlim = x_lim_sig, ylim = y_lim_sig) +
+  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
+           label = paste0("rho = ", round(cor_sig_bcell$estimate, 3),
+                          "\np = ", round(cor_sig_bcell$p.value, 3),
+                          "\nn = ", nrow(sig_bcell)), size = 3.5) +
+  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
+       title = "B cell MNase-seq (Gaffney et al. 2012)") +
+  theme_cowplot(font_size = 11)
 
-ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_three_maps_sig6samples.pdf"),
-       multi_panel_sig, width = 18, height = 6)
+multi_panel_sig <- plot_grid(p_sig_lung, p_sig_25yo, p_sig_70yo, p_sig_bcell, ncol = 4, labels = c("A", "B", "C", "D"))
+
+ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_all_maps_sig6samples.pdf"),
+       multi_panel_sig, width = 24, height = 6)
 
 
 ################################################################################################
