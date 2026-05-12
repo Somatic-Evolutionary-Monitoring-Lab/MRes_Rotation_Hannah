@@ -6,3 +6,5 @@ data/
 .Rhistory
 .Rapp.history
 .Rproj.user/
+ctDNA_shedding/outputs/
+mut_panel/outputs/

@@ -17,71 +17,59 @@ setwd("/Volumes/RFS/rfs-kh_rfs-rDsHEAv2WP0/hannah/MRes_Rotation_Hannah/ctDNA_she
 #### Source required functions & load libraries ####
 ####################################################
 
-# suppress warning on R build version #
 library(fst)
-library(data.table) 
-library(dplyr) 
-library(ggplot2) 
-library(cowplot) 
-library(RColorBrewer) 
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(RColorBrewer)
 library(tidyr)
 
 #############################################
 #### Make a folder for this analysis run ####
 #############################################
 
-date <- gsub("-","",Sys.Date())
+date <- gsub("-", "", Sys.Date())
 
 analysis_name <- 'nucleosome_mapping_continuous'
 out_name <- 'outputs'
 out_dir_general <- paste(out_name, analysis_name, sep='/')
-if( !file.exists(out_dir_general) ) dir.create( out_dir_general )
+if (!file.exists(out_dir_general)) dir.create(out_dir_general)
 
 out_dir_logs <- paste(out_dir_general, 'logs', sep='/')
-if( !file.exists(out_dir_logs) ) dir.create( out_dir_logs )
+if (!file.exists(out_dir_logs)) dir.create(out_dir_logs)
 
-outputs.folder <- paste0( out_dir_general, "/", date, "/" )
-
-if( !file.exists(outputs.folder) ) dir.create( outputs.folder )
-
+outputs.folder <- paste0(out_dir_general, "/", date, "/")
+if (!file.exists(outputs.folder)) dir.create(outputs.folder)
 
 ##############################################
 #### Get Inputs required for all analyses ####
 ##############################################
 
+cat("Reading input data...\n")
+
 # Read in ctDNA data with CCF z-scores
 ctDNA_data_path <- "outputs/ccf_zscores_multi_patient/20260319/ctDNA_data_pos_multiple.fst"
 ctDNA_data <- read_fst(ctDNA_data_path)
 
-# Read in nucleosome map - LUNG CANCER MA ET AL 2017
-nucleosome_map_path_lung_ma <- "data/SRA438908_lung_cancer_Ma2017_stable_100bp_hg19.bed"
-nuc_lung_ma <- data.table::fread(nucleosome_map_path_lung_ma)
-colnames(nuc_lung_ma) <- c("chr", "start", "end", "nuc_occupancy", "sd", "rel_deviation")
-head(nuc_lung_ma)
+# Read in nucleosome maps
+cat("Reading nucleosome maps...\n")
 
-# Read in nucleosome map - HEALTHY 25YO TEO ET AL. 2018
-nucleosome_map_path_healthy_25yo <- "data/GSE114511_25yo_Teo_cfDNA_stable_100bp.bed"
-nuc_healthy_25yo <- data.table::fread(nucleosome_map_path_healthy_25yo)
-colnames(nuc_healthy_25yo) <- c("chr", "start", "end", "nuc_occupancy", "sd", "rel_deviation")
-head(nuc_healthy_25yo)
+read_nuc_map <- function(path) {
+  dt <- data.table::fread(path)
+  colnames(dt) <- c("chr", "start", "end", "nuc_occupancy", "sd", "rel_deviation")
+  setkey(dt, chr, start, end)
+  return(dt)
+}
 
-# Read in nucleosome map - HEALTHY 70YO TEO ET AL. 2018
-nucleosome_map_path_healthy_70yo <- "data/GSE114511_70yo_Teo_cfDNA_stable_100bp.bed"
-nuc_healthy_70yo <- data.table::fread(nucleosome_map_path_healthy_70yo)
-colnames(nuc_healthy_70yo) <- c("chr", "start", "end", "nuc_occupancy", "sd", "rel_deviation")
-head(nuc_healthy_70yo)
-
-# Read in nucleosome map - B CELL MNASE-SEQ GAFFNEY ET AL. 2012
-nucleosome_map_path_bcell <- "data/GSE36979_Gaffney2012_Bcells_MNase-seq_stable_100bp_hg19.bed"
-nuc_bcell <- data.table::fread(nucleosome_map_path_bcell)
-colnames(nuc_bcell) <- c("chr", "start", "end", "nuc_occupancy", "sd", "rel_deviation")
-head(nuc_bcell)
+nuc_lung_ma      <- read_nuc_map("data/SRA438908_lung_cancer_Ma2017_stable_100bp_hg19.bed")
+nuc_lung_snyder  <- read_nuc_map("data/GSE71378_lung_cancer_Snyder_cfDNA_stable_100bp.bed")
+nuc_healthy_25yo <- read_nuc_map("data/GSE114511_25yo_Teo_cfDNA_stable_100bp.bed")
+nuc_healthy_70yo <- read_nuc_map("data/GSE114511_70yo_Teo_cfDNA_stable_100bp.bed")
+nuc_bcell        <- read_nuc_map("data/GSE36979_Gaffney2012_Bcells_MNase-seq_stable_100bp_hg19.bed")
 
 # Read in clinical features
 clinical <- read.delim("data/tx842_clinical_outcome_20251211.tsv")
-head(clinical)
-colnames(clinical)
-
 
 ################################################################################################
 #### What is the average age in this cohort?                                                ####
@@ -91,12 +79,14 @@ my_patients <- unique(ctDNA_data$patient)
 my_ages <- clinical %>% filter(Shorter_ID %in% my_patients) %>% pull(age)
 
 summary(my_ages)
-mean(my_ages, na.rm = TRUE)
-median(my_ages, na.rm = TRUE)
+cat("Mean age:", mean(my_ages, na.rm = TRUE), "\n")
+cat("Median age:", median(my_ages, na.rm = TRUE), "\n")
 
 ###############################################################
 #### Build mutation summary across all patients            ####
 ###############################################################
+
+cat("Building mutation summary...\n")
 
 mutation_summary_all <- ctDNA_data %>%
   group_by(patient, Pos) %>%
@@ -108,349 +98,228 @@ mutation_summary_all <- ctDNA_data %>%
     n_samples = n(),
     sig_6samples = first(sig_6samples),
     .groups = "drop"
-  )
-
-# Parse Pos into chr and position
-mutation_summary_all <- mutation_summary_all %>%
-  tidyr::separate(Pos, into = c("chr_num", "pos", "ref", "alt"), 
+  ) %>%
+  tidyr::separate(Pos, into = c("chr_num", "pos", "ref", "alt"),
                   sep = ":", remove = FALSE) %>%
   mutate(
     chr = paste0("chr", chr_num),
     pos = as.numeric(pos)
   ) %>%
-  select(-chr_num) %>% 
-  select(patient, Pos, chr, pos, ref, alt, n_samples, mean_z, se_z, ci_lower, ci_upper, sig_6samples)
+  select(-chr_num) %>%
+  select(patient, Pos, chr, pos, ref, alt, n_samples, mean_z, se_z,
+         ci_lower, ci_upper, sig_6samples)
+
+# Convert to data.table and add pos_end for foverlaps
+setDT(mutation_summary_all)
+mutation_summary_all[, pos_end := pos + 1L]
+setkey(mutation_summary_all, chr, pos, pos_end)
 
 ################################################################################################
-#### Does CCF z-score correlate with nucleosome occupancy? LUNG CANCER CFDNA, MA ET AL 2017 ####
+#### Fast overlap function using foverlaps                                                  ####
 ################################################################################################
 
-# For each mutation, get the nucleosome occupancy of the overlapping bin
-mutation_summary_all_nuc_lung_ma <- mutation_summary_all %>%
-  mutate(nuc_occupancy = mapply(function(c, p) {
-    idx <- which(nuc_lung_ma$chr == c & nuc_lung_ma$start <= p & nuc_lung_ma$end > p)
-    if (length(idx) > 0) nuc_lung_ma$nuc_occupancy[idx[1]] else NA
-  }, chr, pos))
-
-# How many mutations have a nucleosome occupancy score?
-cat("Mutations with nucleosome occupancy:", sum(!is.na(mutation_summary_all_nuc_lung_ma$nuc_occupancy)), "\n")
-cat("Mutations without (unstable regions):", sum(is.na(mutation_summary_all_nuc_lung_ma$nuc_occupancy)), "\n")
-cat("Proportion covered:", round(mean(!is.na(mutation_summary_all_nuc_lung_ma$nuc_occupancy)) * 100, 1), "%\n")
-
-# Spearman correlation test between mean_z and nucleosome occupancy
-cor_test <- cor.test(mutation_summary_all_nuc_lung_ma$mean_z,
-                     mutation_summary_all_nuc_lung_ma$nuc_occupancy,
-                     alternative = "two.sided",
-                     method = "spearman"
-                     )
-
-# Plotting
-mutation_summary_all_nuc_lung_ma %>%
-  ggplot(aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#D7191C", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  annotate("text",
-           x = Inf, y = Inf,
-           hjust = 1.1, vjust = 1.5,
-           label = paste0("Spearman rho = ", round(cor_test$estimate, 3),
-                          "\np = ", round(cor_test$p.value, 3)),
-           size = 4) +
-  labs(x = "Normalised nucleosome occupancy",
-       y = "Mean CCF z-score",
-       title = "CCF z-score vs nucleosome occupancy - Lung cancer cfDNA, Ma et al. 2017",
-       subtitle = "n = 5,575 mutations") +
-  theme_cowplot()
-
-ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_lung_ma_2017.pdf"),
-       width = 10, height = 6)
+map_nuc_occupancy <- function(mutations, nuc_map, label) {
+  cat("Mapping:", label, "\n")
+  
+  result <- foverlaps(
+    mutations,
+    nuc_map[, .(chr, start, end, nuc_occupancy)],
+    by.x = c("chr", "pos", "pos_end"),
+    by.y = c("chr", "start", "end"),
+    type = "within",
+    nomatch = NA
+  )
+  
+  cat(label, "- Mutations with nucleosome occupancy:", sum(!is.na(result$nuc_occupancy)), "\n")
+  cat(label, "- Mutations without (unstable regions):", sum(is.na(result$nuc_occupancy)), "\n")
+  cat(label, "- Proportion covered:", round(mean(!is.na(result$nuc_occupancy)) * 100, 1), "%\n")
+  
+  return(result)
+}
 
 ################################################################################################
-#### Does CCF z-score correlate with nucleosome occupancy? HEALTHY 25YO, TEO ET AL 2018     ####
+#### Map all nucleosome datasets                                                            ####
 ################################################################################################
 
-mutation_summary_all_nuc_25yo <- mutation_summary_all %>%
-  mutate(nuc_occupancy = mapply(function(c, p) {
-    idx <- which(nuc_healthy_25yo$chr == c & nuc_healthy_25yo$start <= p & nuc_healthy_25yo$end > p)
-    if (length(idx) > 0) nuc_healthy_25yo$nuc_occupancy[idx[1]] else NA
-  }, chr, pos))
-
-cat("25yo - Mutations with nucleosome occupancy:", sum(!is.na(mutation_summary_all_nuc_25yo$nuc_occupancy)), "\n")
-cat("25yo - Mutations without (unstable regions):", sum(is.na(mutation_summary_all_nuc_25yo$nuc_occupancy)), "\n")
-cat("25yo - Proportion covered:", round(mean(!is.na(mutation_summary_all_nuc_25yo$nuc_occupancy)) * 100, 1), "%\n")
-
-cor_test_25yo <- cor.test(mutation_summary_all_nuc_25yo$mean_z,
-                          mutation_summary_all_nuc_25yo$nuc_occupancy,
-                          alternative = "two.sided",
-                          method = "spearman")
-
+mut_lung_ma      <- map_nuc_occupancy(mutation_summary_all, nuc_lung_ma,      "Ma et al. 2017 lung cancer")
+mut_lung_snyder  <- map_nuc_occupancy(mutation_summary_all, nuc_lung_snyder,  "Snyder et al. 2016 lung cancer")
+mut_25yo         <- map_nuc_occupancy(mutation_summary_all, nuc_healthy_25yo, "Teo et al. 2018 25yo")
+mut_70yo         <- map_nuc_occupancy(mutation_summary_all, nuc_healthy_70yo, "Teo et al. 2018 70yo")
+mut_bcell        <- map_nuc_occupancy(mutation_summary_all, nuc_bcell,        "Gaffney et al. 2012 B cell")
 
 ################################################################################################
-#### Does CCF z-score correlate with nucleosome occupancy? HEALTHY 70YO, TEO ET AL 2018     ####
+#### Correlation tests                                                                      ####
 ################################################################################################
 
-mutation_summary_all_nuc_70yo <- mutation_summary_all %>%
-  mutate(nuc_occupancy = mapply(function(c, p) {
-    idx <- which(nuc_healthy_70yo$chr == c & nuc_healthy_70yo$start <= p & nuc_healthy_70yo$end > p)
-    if (length(idx) > 0) nuc_healthy_70yo$nuc_occupancy[idx[1]] else NA
-  }, chr, pos))
+run_cor <- function(dt) {
+  cor.test(dt$mean_z, dt$nuc_occupancy, method = "spearman", alternative = "two.sided")
+}
 
-cat("70yo - Mutations with nucleosome occupancy:", sum(!is.na(mutation_summary_all_nuc_70yo$nuc_occupancy)), "\n")
-cat("70yo - Mutations without (unstable regions):", sum(is.na(mutation_summary_all_nuc_70yo$nuc_occupancy)), "\n")
-cat("70yo - Proportion covered:", round(mean(!is.na(mutation_summary_all_nuc_70yo$nuc_occupancy)) * 100, 1), "%\n")
-
-cor_test_70yo <- cor.test(mutation_summary_all_nuc_70yo$mean_z,
-                          mutation_summary_all_nuc_70yo$nuc_occupancy,
-                          alternative = "two.sided",
-                          method = "spearman")
+cor_lung_ma      <- run_cor(mut_lung_ma)
+cor_lung_snyder  <- run_cor(mut_lung_snyder)
+cor_25yo         <- run_cor(mut_25yo)
+cor_70yo         <- run_cor(mut_70yo)
+cor_bcell        <- run_cor(mut_bcell)
 
 ################################################################################################
-#### Does CCF z-score correlate with nucleosome occupancy? B CELL, GAFFNEY ET AL. 2012      ####
+#### Build plots                                                                            ####
 ################################################################################################
 
-mutation_summary_all_nuc_bcell <- mutation_summary_all %>%
-  mutate(nuc_occupancy = mapply(function(c, p) {
-    idx <- which(nuc_bcell$chr == c & nuc_bcell$start <= p & nuc_bcell$end > p)
-    if (length(idx) > 0) nuc_bcell$nuc_occupancy[idx[1]] else NA
-  }, chr, pos))
+make_plot <- function(dt, cor_result, colour, title) {
+  dt %>%
+    filter(!is.na(nuc_occupancy)) %>%
+    ggplot(aes(x = nuc_occupancy, y = mean_z)) +
+    geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
+    geom_smooth(method = "lm", colour = colour, se = TRUE) +
+    geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
+    annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
+             label = paste0("rho = ", round(cor_result$estimate, 3),
+                            "\np = ", format(cor_result$p.value, scientific = TRUE, digits = 2),
+                            "\nn = ", sum(!is.na(dt$nuc_occupancy))),
+             size = 5) +
+    labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score across timepoints",
+         title = title) +
+    theme_cowplot(font_size = 14)
+}
 
-cat("B cell - Mutations with nucleosome occupancy:", sum(!is.na(mutation_summary_all_nuc_bcell$nuc_occupancy)), "\n")
-cat("B cell - Mutations without (unstable regions):", sum(is.na(mutation_summary_all_nuc_bcell$nuc_occupancy)), "\n")
-cat("B cell - Proportion covered:", round(mean(!is.na(mutation_summary_all_nuc_bcell$nuc_occupancy)) * 100, 1), "%\n")
+p_lung_ma     <- make_plot(mut_lung_ma,     cor_lung_ma,     "#D7191C", "Lung cancer cfDNA (Ma et al. 2017)")
+p_lung_snyder <- make_plot(mut_lung_snyder, cor_lung_snyder, "#FD8D3C", "Lung cancer cfDNA (Snyder et al. 2016)")
+p_25yo        <- make_plot(mut_25yo,        cor_25yo,        "#2C7BB6", "Healthy 25yo cfDNA (Teo et al. 2018)")
+p_70yo        <- make_plot(mut_70yo,        cor_70yo,        "#1A9641", "Healthy 70yo cfDNA (Teo et al. 2018)")
+p_bcell       <- make_plot(mut_bcell,       cor_bcell,       "#762A83", "B cell MNase-seq (Gaffney et al. 2012)")
 
-cor_test_bcell <- cor.test(mutation_summary_all_nuc_bcell$mean_z,
-                          mutation_summary_all_nuc_bcell$nuc_occupancy,
-                          alternative = "two.sided",
-                          method = "spearman")
-
-
-################################################################################################
-#### Multi-panel plot: all nucleosome maps                                            ####
-################################################################################################
-
-# Get shared axis limits
-all_occ <- c(
-  mutation_summary_all_nuc_lung_ma$nuc_occupancy,
-  mutation_summary_all_nuc_25yo$nuc_occupancy,
-  mutation_summary_all_nuc_70yo$nuc_occupancy,
-  mutation_summary_all_nuc_bcell$nuc_occupancy
-)
-all_z <- c(
-  mutation_summary_all_nuc_lung_ma$mean_z,
-  mutation_summary_all_nuc_25yo$mean_z,
-  mutation_summary_all_nuc_70yo$mean_z,
-  mutation_summary_all_nuc_bcell$mean_z
-)
-
-x_lim <- range(all_occ, na.rm = TRUE)
-y_lim <- range(all_z, na.rm = TRUE)
-
-# Build individual plots
-p_lung <- mutation_summary_all_nuc_lung_ma %>%
-  filter(!is.na(nuc_occupancy)) %>%
-  ggplot(aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#D7191C", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  coord_cartesian(xlim = x_lim, ylim = y_lim) +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_test$estimate, 3),
-                          "\np = ", round(cor_test$p.value, 3)), size = 3.5) +
-  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
-       title = "Lung cancer cfDNA (Ma et al. 2017)") +
-  theme_cowplot(font_size = 11)
-
-p_25yo <- mutation_summary_all_nuc_25yo %>%
-  filter(!is.na(nuc_occupancy)) %>%
-  ggplot(aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#2C7BB6", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  coord_cartesian(xlim = x_lim, ylim = y_lim) +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_test_25yo$estimate, 3),
-                          "\np = ", round(cor_test_25yo$p.value, 3)), size = 3.5) +
-  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
-       title = "Healthy 25yo cfDNA (Teo et al. 2018)") +
-  theme_cowplot(font_size = 11)
-
-p_70yo <- mutation_summary_all_nuc_70yo %>%
-  filter(!is.na(nuc_occupancy)) %>%
-  ggplot(aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#FF7F00", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  coord_cartesian(xlim = x_lim, ylim = y_lim) +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_test_70yo$estimate, 3),
-                          "\np = ", round(cor_test_70yo$p.value, 3)), size = 3.5) +
-  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
-       title = "Healthy 70yo cfDNA (Teo et al. 2018)") +
-  theme_cowplot(font_size = 11)
-
-p_bcell <- mutation_summary_all_nuc_bcell %>%
-  filter(!is.na(nuc_occupancy)) %>%
-  ggplot(aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#762A83", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  coord_cartesian(xlim = x_lim, ylim = y_lim) +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_test_bcell$estimate, 3),
-                          "\np = ", round(cor_test_bcell$p.value, 3)), size = 3.5) +
-  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
-       title = "B cell MNase-seq (Gaffney et al. 2012)") +
-  theme_cowplot(font_size = 11)
-
-# Combine into one figure
-multi_panel <- plot_grid(p_lung, p_25yo, p_70yo, p_bcell, ncol = 2, labels = c("A", "B", "C", "D"))
+multi_panel <- plot_grid(p_lung_ma, p_lung_snyder, p_25yo, p_70yo, p_bcell,
+                         ncol = 3, labels = c("A", "B", "C", "D", "E"))
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_all_maps.pdf"),
-       multi_panel, width = 10, height = 10)
-
+       multi_panel, width = 15, height = 10)
 
 ################################################################################################
-#### Multi-panel plot: all nucleosome maps for mutations significantly different            ####
-#### CCF z-score distribution to 0 across 6 samples (from 3 patients)                       ####
+#### sig_6samples subset                                                                    ####
 ################################################################################################
 
-# Filter to sig_6samples mutations
-sig_lung <- mutation_summary_all_nuc_lung_ma %>% filter(sig_6samples == TRUE, !is.na(nuc_occupancy))
-sig_25yo <- mutation_summary_all_nuc_25yo %>% filter(sig_6samples == TRUE, !is.na(nuc_occupancy))
-sig_70yo <- mutation_summary_all_nuc_70yo %>% filter(sig_6samples == TRUE, !is.na(nuc_occupancy))
-sig_bcell <- mutation_summary_all_nuc_bcell %>% filter(sig_6samples == TRUE, !is.na(nuc_occupancy))
+sig_lung_ma     <- mut_lung_ma[sig_6samples == TRUE & !is.na(nuc_occupancy)]
+sig_lung_snyder <- mut_lung_snyder[sig_6samples == TRUE & !is.na(nuc_occupancy)]
+sig_25yo        <- mut_25yo[sig_6samples == TRUE & !is.na(nuc_occupancy)]
+sig_70yo        <- mut_70yo[sig_6samples == TRUE & !is.na(nuc_occupancy)]
+sig_bcell       <- mut_bcell[sig_6samples == TRUE & !is.na(nuc_occupancy)]
 
-# Correlation tests
-cor_sig_lung <- cor.test(sig_lung$mean_z, sig_lung$nuc_occupancy, alternative = "two.sided", method = "spearman")
-cor_sig_25yo <- cor.test(sig_25yo$mean_z, sig_25yo$nuc_occupancy, alternative = "two.sided", method = "spearman")
-cor_sig_70yo <- cor.test(sig_70yo$mean_z, sig_70yo$nuc_occupancy, alternative = "two.sided", method = "spearman")
-cor_sig_bcell <- cor.test(sig_bcell$mean_z, sig_bcell$nuc_occupancy, alternative = "two.sided", method = "spearman")
+cor_sig_lung_ma     <- run_cor(sig_lung_ma)
+cor_sig_lung_snyder <- run_cor(sig_lung_snyder)
+cor_sig_25yo        <- run_cor(sig_25yo)
+cor_sig_70yo        <- run_cor(sig_70yo)
+cor_sig_bcell       <- run_cor(sig_bcell)
 
-# Shared axis limits
-sig_occ <- c(sig_lung$nuc_occupancy, sig_25yo$nuc_occupancy, sig_70yo$nuc_occupancy, sig_bcell$nuc_occupancy)
-sig_z <- c(sig_lung$mean_z, sig_25yo$mean_z, sig_70yo$mean_z, sig_bcell$mean_z)
-x_lim_sig <- range(sig_occ, na.rm = TRUE)
-y_lim_sig <- range(sig_z, na.rm = TRUE)
+p_sig_lung_ma     <- make_plot(sig_lung_ma,     cor_sig_lung_ma,     "#D7191C", "Lung cancer cfDNA (Ma et al. 2017)")
+p_sig_lung_snyder <- make_plot(sig_lung_snyder, cor_sig_lung_snyder, "#FD8D3C", "Lung cancer cfDNA (Snyder et al. 2016)")
+p_sig_25yo        <- make_plot(sig_25yo,        cor_sig_25yo,        "#2C7BB6", "Healthy 25yo cfDNA (Teo et al. 2018)")
+p_sig_70yo        <- make_plot(sig_70yo,        cor_sig_70yo,        "#1A9641", "Healthy 70yo cfDNA (Teo et al. 2018)")
+p_sig_bcell       <- make_plot(sig_bcell,       cor_sig_bcell,       "#762A83", "B cell MNase-seq (Gaffney et al. 2012)")
 
-# Plots
-p_sig_lung <- ggplot(sig_lung, aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.5, size = 1.5, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#D7191C", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  coord_cartesian(xlim = x_lim_sig, ylim = y_lim_sig) +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_sig_lung$estimate, 3),
-                          "\np = ", round(cor_sig_lung$p.value, 3),
-                          "\nn = ", nrow(sig_lung)), size = 3.5) +
-  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
-       title = "Lung cancer cfDNA (Ma et al. 2017)") +
-  theme_cowplot(font_size = 11)
-
-p_sig_25yo <- ggplot(sig_25yo, aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.5, size = 1.5, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#2C7BB6", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  coord_cartesian(xlim = x_lim_sig, ylim = y_lim_sig) +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_sig_25yo$estimate, 3),
-                          "\np = ", round(cor_sig_25yo$p.value, 3),
-                          "\nn = ", nrow(sig_25yo)), size = 3.5) +
-  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
-       title = "Healthy 25yo cfDNA (Teo et al. 2018)") +
-  theme_cowplot(font_size = 11)
-
-p_sig_70yo <- ggplot(sig_70yo, aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.5, size = 1.5, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#FF7F00", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  coord_cartesian(xlim = x_lim_sig, ylim = y_lim_sig) +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_sig_70yo$estimate, 3),
-                          "\np = ", round(cor_sig_70yo$p.value, 3),
-                          "\nn = ", nrow(sig_70yo)), size = 3.5) +
-  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
-       title = "Healthy 70yo cfDNA (Teo et al. 2018)") +
-  theme_cowplot(font_size = 11)
-
-p_sig_bcell <- ggplot(sig_bcell, aes(x = nuc_occupancy, y = mean_z)) +
-  geom_point(alpha = 0.5, size = 1.5, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#762A83", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  coord_cartesian(xlim = x_lim_sig, ylim = y_lim_sig) +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_sig_bcell$estimate, 3),
-                          "\np = ", round(cor_sig_bcell$p.value, 3),
-                          "\nn = ", nrow(sig_bcell)), size = 3.5) +
-  labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score",
-       title = "B cell MNase-seq (Gaffney et al. 2012)") +
-  theme_cowplot(font_size = 11)
-
-multi_panel_sig <- plot_grid(p_sig_lung, p_sig_25yo, p_sig_70yo, p_sig_bcell, ncol = 4, labels = c("A", "B", "C", "D"))
+multi_panel_sig <- plot_grid(p_sig_lung_ma, p_sig_lung_snyder, p_sig_25yo, p_sig_70yo, p_sig_bcell,
+                             ncol = 3, labels = c("A", "B", "C", "D", "E"))
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_all_maps_sig6samples.pdf"),
-       multi_panel_sig, width = 24, height = 6)
-
+       multi_panel_sig, width = 10, height = 6)
 
 ################################################################################################
-#### Examine correlation between CCF z-score and difference between lung cancer cfDNA       ####
-#### and healthy cfDNA (70yo)                                                               ####
+#### Tumour-specific nucleosome occupancy: lung cancer minus healthy 70yo                  ####
 ################################################################################################
 
-# Join lung and healthy 70yo maps on matching bins
-nuc_diff <- merge(
+cat("Computing tumour-specific occupancy difference...\n")
+
+# Ma et al. lung - healthy 70yo
+nuc_diff_ma <- merge(
   nuc_lung_ma[, .(chr, start, end, occ_lung = nuc_occupancy)],
   nuc_healthy_70yo[, .(chr, start, end, occ_healthy = nuc_occupancy)],
   by = c("chr", "start", "end")
 )
+nuc_diff_ma[, occ_diff := occ_lung - occ_healthy]
+setkey(nuc_diff_ma, chr, start, end)
 
-# How many bins are shared?
-cat("Bins in lung map:", nrow(nuc_lung_ma), "\n")
-cat("Bins in healthy 70yo map:", nrow(nuc_healthy_70yo), "\n")
-cat("Shared bins:", nrow(nuc_diff), "\n")
+cat("Ma - Bins in lung map:", nrow(nuc_lung_ma), "\n")
+cat("Ma - Bins in healthy 70yo map:", nrow(nuc_healthy_70yo), "\n")
+cat("Ma - Shared bins:", nrow(nuc_diff_ma), "\n")
+summary(nuc_diff_ma$occ_diff)
 
-# Compute difference
-nuc_diff[, occ_diff := occ_lung - occ_healthy]
+# Snyder et al. lung - healthy 70yo
+nuc_diff_snyder <- merge(
+  nuc_lung_snyder[, .(chr, start, end, occ_lung = nuc_occupancy)],
+  nuc_healthy_70yo[, .(chr, start, end, occ_healthy = nuc_occupancy)],
+  by = c("chr", "start", "end")
+)
+nuc_diff_snyder[, occ_diff := occ_lung - occ_healthy]
+setkey(nuc_diff_snyder, chr, start, end)
 
-summary(nuc_diff$occ_diff)
+cat("Snyder - Bins in lung map:", nrow(nuc_lung_snyder), "\n")
+cat("Snyder - Bins in healthy 70yo map:", nrow(nuc_healthy_70yo), "\n")
+cat("Snyder - Shared bins:", nrow(nuc_diff_snyder), "\n")
+summary(nuc_diff_snyder$occ_diff)
 
-# For each mutation, get the occupancy difference
-mutation_summary_all_nuc_diff <- mutation_summary_all %>%
-  mutate(occ_diff = mapply(function(c, p) {
-    idx <- which(nuc_diff$chr == c & nuc_diff$start <= p & nuc_diff$end > p)
-    if (length(idx) > 0) nuc_diff$occ_diff[idx[1]] else NA
-  }, chr, pos))
+# Map mutations to diff scores
+mut_diff_ma <- foverlaps(
+  mutation_summary_all,
+  nuc_diff_ma[, .(chr, start, end, occ_diff)],
+  by.x = c("chr", "pos", "pos_end"),
+  by.y = c("chr", "start", "end"),
+  type = "within",
+  nomatch = NA
+)
 
-cat("Mutations with diff score:", sum(!is.na(mutation_summary_all_nuc_diff$occ_diff)), "\n")
-cat("Mutations without:", sum(is.na(mutation_summary_all_nuc_diff$occ_diff)), "\n")
+mut_diff_snyder <- foverlaps(
+  mutation_summary_all,
+  nuc_diff_snyder[, .(chr, start, end, occ_diff)],
+  by.x = c("chr", "pos", "pos_end"),
+  by.y = c("chr", "start", "end"),
+  type = "within",
+  nomatch = NA
+)
 
-# Correlation test
-cor_test_diff <- cor.test(mutation_summary_all_nuc_diff$mean_z,
-                          mutation_summary_all_nuc_diff$occ_diff,
-                          method = "spearman")
-cor_test_diff
+cat("Ma - Mutations with diff score:", sum(!is.na(mut_diff_ma$occ_diff)), "\n")
+cat("Ma - Mutations without:", sum(is.na(mut_diff_ma$occ_diff)), "\n")
+cat("Snyder - Mutations with diff score:", sum(!is.na(mut_diff_snyder$occ_diff)), "\n")
+cat("Snyder - Mutations without:", sum(is.na(mut_diff_snyder$occ_diff)), "\n")
 
-# Plot
-mutation_summary_all_nuc_diff %>%
-  filter(!is.na(occ_diff)) %>%
-  ggplot(aes(x = occ_diff, y = mean_z)) +
-  geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
-  geom_smooth(method = "lm", colour = "#4DAF4A", se = TRUE) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
-  annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("rho = ", round(cor_test_diff$estimate, 3),
-                          "\np = ", round(cor_test_diff$p.value, 3)), size = 4) +
-  labs(x = "Nucleosome occupancy difference (lung cancer - healthy 70yo)",
-       y = "Mean CCF z-score",
-       title = "CCF z-score vs tumour-specific nucleosome occupancy change") +
-  theme_cowplot()
+# Correlation tests
+cor_diff_ma <- cor.test(mut_diff_ma$mean_z, mut_diff_ma$occ_diff, method = "spearman")
+cor_diff_snyder <- cor.test(mut_diff_snyder$mean_z, mut_diff_snyder$occ_diff, method = "spearman")
+
+cat("Ma tumour-specific diff: rho =", round(cor_diff_ma$estimate, 3),
+    "p =", format(cor_diff_ma$p.value, scientific = TRUE, digits = 2), "\n")
+cat("Snyder tumour-specific diff: rho =", round(cor_diff_snyder$estimate, 3),
+    "p =", format(cor_diff_snyder$p.value, scientific = TRUE, digits = 2), "\n")
+
+# Plot function for diff
+make_diff_plot <- function(dt, cor_result, colour, title) {
+  dt %>%
+    filter(!is.na(occ_diff)) %>%
+    ggplot(aes(x = occ_diff, y = mean_z)) +
+    geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
+    geom_smooth(method = "lm", colour = colour, se = TRUE) +
+    geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+    annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
+             label = paste0("rho = ", round(cor_result$estimate, 3),
+                            "\np = ", format(cor_result$p.value, scientific = FALSE, digits = 2),
+                            "\nn = ", sum(!is.na(dt$occ_diff))),
+             size = 5) +
+    labs(x = "Nucleosome occupancy difference",
+         y = "Mean CCF z-score across timepoints",
+         title = title) +
+    theme_cowplot(font_size = 14)
+}
+
+p_diff_ma <- make_diff_plot(mut_diff_ma, cor_diff_ma, "#D7191C",
+                            "Tumour-specific occupancy\n (Ma et al. 2017 - Teo 70yo)")
+p_diff_snyder <- make_diff_plot(mut_diff_snyder, cor_diff_snyder, "#FD8D3C",
+                                "Tumour-specific occupancy\n (Snyder et al. 2016 - Teo 70yo)")
+
+multi_diff <- plot_grid(p_diff_ma, p_diff_snyder, ncol = 2, labels = c("A", "B"))
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occ_diff_lung_healthy70.pdf"),
-       width = 8, height = 6)
+       multi_diff, width = 10, height = 6)
 
-
-
-
+cat("Analysis complete.\n")
 
 
 
