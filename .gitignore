@@ -8,3 +8,7 @@ data/
 .Rproj.user/
 ctDNA_shedding/outputs/
 mut_panel/outputs/
+01.personalis/00.data/
+01.personalis/01.shedding/00.fragmentomics/
+01.personalis/01.shedding/logs/
+.ipynb_checkpoints/
