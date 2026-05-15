@@ -6,10 +6,10 @@ import os
 # Load mutation table
 # -----------------------------------------------------------------------------
 
-DATA_DIR    = "/SAN/colcc/tracerx_personalis_pipeline/hannah/01.personalis/00.data"
+DATA_DIR   = "/SAN/colcc/tracerx_personalis_pipeline/hannah/MRes_Rotation_Hannah/01.personalis/00.data"
+OUTPUT_DIR = "/SAN/colcc/tracerx_personalis_pipeline/hannah/MRes_Rotation_Hannah/01.personalis/01.shedding/00.fragmentomics"
 BED_DIR     = os.path.join(DATA_DIR, "00.bed_files")
 MUT_DIR     = os.path.join(DATA_DIR, "01.mutation_table")
-OUTPUT_DIR  = "/SAN/colcc/tracerx_personalis_pipeline/hannah/01.personalis/01.shedding/00.fragmentomics"
 
 # Set to false to run on all data, true to run on a single patient
 TEST_RUN = False
