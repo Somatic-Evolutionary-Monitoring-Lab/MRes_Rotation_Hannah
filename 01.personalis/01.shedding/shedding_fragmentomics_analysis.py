@@ -3,23 +3,39 @@ import numpy as np
 import os
 
 # -----------------------------------------------------------------------------
-# Load mutation table
+# Set up
 # -----------------------------------------------------------------------------
 
+# Set to "preop" or "postop"
+# This controls which mutation table is used for the analysis:
+#   - "preop":  CCF z-scores computed from pre-operative blood samples
+#   - "postop": CCF z-scores computed from post-operative blood samples (default)
+# Output files will be saved to a subdirectory named after the analysis mode.
+ANALYSIS_MODE = "preop"
+
+# These stay constant regardless of the analysis
 DATA_DIR   = "/SAN/colcc/tracerx_personalis_pipeline/hannah/MRes_Rotation_Hannah/01.personalis/00.data"
-OUTPUT_DIR = "/SAN/colcc/tracerx_personalis_pipeline/hannah/MRes_Rotation_Hannah/01.personalis/01.shedding/00.fragmentomics"
 BED_DIR     = os.path.join(DATA_DIR, "00.bed_files")
 MUT_DIR     = os.path.join(DATA_DIR, "01.mutation_table")
+
+# Update paths depending on analysis mode
+if ANALYSIS_MODE == "preop":
+    MUT_FILE = "ctDNA_data_black_hg38_ccfzscore_highlow_preop_YYYYMMDD.tsv"
+else:
+    MUT_FILE = "ctDNA_data_black_hg38_ccfzscore_highlow_20260507.tsv"
+
+OUTPUT_DIR = f"/SAN/colcc/tracerx_personalis_pipeline/hannah/MRes_Rotation_Hannah/01.personalis/01.shedding/00.fragmentomics/{ANALYSIS_MODE}"
 
 # Set to false to run on all data, true to run on a single patient
 TEST_RUN = False
 
+# Load mutation file
 ctDNA_mutations = pd.read_csv(
-    os.path.join(MUT_DIR, "ctDNA_data_black_hg38_ccfzscore_highlow_20260507.tsv"),
+    os.path.join(MUT_DIR, MUT_FILE),
     sep="\t"
 )
 
-print("Loaded ctDNA_mutations")
+print(f"Loaded ctDNA_mutations ({ANALYSIS_MODE} mode): {ctDNA_mutations.shape[0]} mutations, {ctDNA_mutations['cruk_id'].nunique()} patients")
 
 # -----------------------------------------------------------------------------
 # Compute mutation- and patient-level fragmentomics characteristics
