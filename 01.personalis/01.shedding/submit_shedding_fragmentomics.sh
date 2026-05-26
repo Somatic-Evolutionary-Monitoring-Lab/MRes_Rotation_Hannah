@@ -6,7 +6,7 @@
 #$ -S /bin/bash
 #$ -N fragmentomics
 #$ -cwd
-#$ -o /SAN/colcc/tracerx_personalis_pipeline/hannah/01.personalis/01.shedding/logs/
-#$ -e /SAN/colcc/tracerx_personalis_pipeline/hannah/01.personalis/01.shedding/logs/
+#$ -o /SAN/colcc/tracerx_personalis_pipeline/hannah/MRes_Rotation_Hannah/01.personalis/01.shedding/logs/
+#$ -e /SAN/colcc/tracerx_personalis_pipeline/hannah/MRes_Rotation_Hannah/01.personalis/01.shedding/logs/
 
-/SAN/colcc/tracerx_personalis_pipeline/hannah/py_env/bin/python -u /SAN/colcc/tracerx_personalis_pipeline/hannah/01.personalis/01.shedding/shedding_fragmentomics_analysis.py
+/SAN/colcc/tracerx_personalis_pipeline/hannah/py_env/bin/python -u /SAN/colcc/tracerx_personalis_pipeline/hannah/MRes_Rotation_Hannah/01.personalis/01.shedding/shedding_fragmentomics_analysis.py

@@ -87,8 +87,12 @@ for cruk_id, patient_mutations in ctDNA_mutations.groupby("cruk_id"):
         overlapping = overlapping.copy()
         overlapping["distance_left"] = mutation["end"] - overlapping["frag_start"]
         overlapping["distance_right"] = overlapping["frag_end"] - mutation["end"]
+
         # Take the min distance as the measure for "fragment end proximity"
         overlapping["min_distance"] = overlapping[["distance_left", "distance_right"]].min(axis=1)
+
+        # Compute normalised min distance to account for different fragment lengths
+        overlapping["min_distance_normalised"] = overlapping["min_distance"] / overlapping["frag_length"]
 
         # Split into wt and mutant fragments
         wt_frags  = overlapping[overlapping["is_mutant"] == False]
@@ -127,7 +131,9 @@ for cruk_id, patient_mutations in ctDNA_mutations.groupby("cruk_id"):
             "median_distance_right_wt":  np.median(wt_frags["distance_right"])  if len(wt_frags)  > 0 else np.nan,
             "median_distance_right_mut": np.median(mut_frags["distance_right"]) if len(mut_frags) > 0 else np.nan,
             "median_min_distance_wt":    np.median(wt_frags["min_distance"])    if len(wt_frags)  > 0 else np.nan,
-            "median_min_distance_mut":   np.median(mut_frags["min_distance"])   if len(mut_frags) > 0 else np.nan
+            "median_min_distance_mut":   np.median(mut_frags["min_distance"])   if len(mut_frags) > 0 else np.nan,
+            "median_min_distance_normalised_wt":  np.median(wt_frags["min_distance_normalised"])  if len(wt_frags)  > 0 else np.nan,
+            "median_min_distance_normalised_mut": np.median(mut_frags["min_distance_normalised"]) if len(mut_frags) > 0 else np.nan
         })
 
     # Save the mutation table for this patient
