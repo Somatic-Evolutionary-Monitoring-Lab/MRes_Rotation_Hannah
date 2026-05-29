@@ -15,7 +15,19 @@ setwd("/Volumes/RFS/rfs-kh_rfs-rDsHEAv2WP0/hannah/MRes_Rotation_Hannah/ctDNA_she
 # Load libraries
 # -----------------------------------------------------------------------------
 
-library(data.table)
+# suppress warning on R build version #
+library(fst)
+library(data.table) 
+library(dplyr) 
+library(ggplot2) 
+library(cowplot) 
+library(RColorBrewer) 
+library(tidyr)
+library(GenomicRanges)
+library(ggpubr)
+library(readr)
+library(readxl)
+library(car)
 
 # -----------------------------------------------------------------------------
 # Make output folder
