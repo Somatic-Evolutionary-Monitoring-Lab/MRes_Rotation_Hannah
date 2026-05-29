@@ -20,7 +20,7 @@ MUT_DIR     = os.path.join(DATA_DIR, "01.mutation_table")
 
 # Update paths depending on analysis mode
 if ANALYSIS_MODE == "preop":
-    MUT_FILE = "ctDNA_data_black_hg38_ccfzscore_highlow_preop_YYYYMMDD.tsv"
+    MUT_FILE = "ctDNA_data_clonal_preop_black_hg38_ccfzscore_highlow_20260526.tsv"
 else:
     MUT_FILE = "ctDNA_data_black_hg38_ccfzscore_highlow_20260507.tsv"
 
