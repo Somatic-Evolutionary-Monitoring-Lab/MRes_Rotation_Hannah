@@ -60,6 +60,7 @@ background.
 
 ## Data availability
 
-Input data and results are not included in this repository. Fragment-level BED files 
-are stored on the UCL cluster. Mutation tables are derived from the TRACERx 
-cohort (Abbosh et al. 2023, Black et al. 2025) and are not publicly available.
+Input data and results are not included in this repository. Fragment-level BED 
+files are stored on the UCL cluster (contact Woody for access). Mutation tables 
+are derived from the TRACERx cohort (Abbosh et al. 2023, Black et al. 2025) 
+and are not publicly available (contact Katie for access).
