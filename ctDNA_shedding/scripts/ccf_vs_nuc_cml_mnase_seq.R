@@ -63,11 +63,11 @@ ctDNA_data_black <- read_fst("outputs/ccf_zscores_multi_patient/20260319/ctDNA_d
 # Read in ctDNA data with CCF z-scores - ABBOSH ET AL. 2023
 ctDNA_data_abbosh <- read_fst("data/ctDNA_data_abbosh_pos_multiple.fst")
 
-# Read in CML MNase-seq data - KUNDAJE et al. 2012, Genome Research
+# Read in CML MNase-seq data - ENCODE ENCSR000CXQ
 cat("Reading CML MNase-seq bigwig file...\n")
 bw <- BigWigFile("data/ENCFF000VNN.bigWig")
 
-# Read in CML MNase-seq nucleosome dyads - KUNDAJE et al. 2012, Genome Research processed by https://zenodo.org/records/3820875
+# Read in CML MNase-seq nucleosome dyads - ENCODE ENCSR000CXQ, processed by https://zenodo.org/records/3820875
 dyads <- fread(
   "data/K562_dyads_hg19.bed.gz",
   col.names = c("chr", "start", "end")

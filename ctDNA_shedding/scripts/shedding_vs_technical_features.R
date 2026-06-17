@@ -11,6 +11,7 @@
 # Date: 2026-04-01
 
 setwd("/Volumes/RFS/rfs-kh_rfs-rDsHEAv2WP0/hannah/MRes_Rotation_Hannah/ctDNA_shedding/")
+source("scripts/plot_theme_mres_frankell.R")
 
 ####################################################
 #### Source required functions & load libraries ####
@@ -24,6 +25,7 @@ library(ggplot2)
 library(cowplot) 
 library(RColorBrewer) 
 library(tidyr)
+library(svglite)
 
 #############################################
 #### Make a folder for this analysis run ####
@@ -72,19 +74,24 @@ mutation_correlation_data <- ctDNA_data_pos_multiple %>%
 # Define function to calculate correlation for plot labels
 get_corr_label <- function(df, var_x) {
   res <- cor.test(df[[var_x]], df$mean_z, method = "spearman")
-  paste0("rho = ", round(res$estimate, 3), " ; p = ", signif(res$p.value, 3))
+  paste0("\u03c1 = ", round(res$estimate, 3), ", p = ", signif(res$p.value, 3))
 }
 
 #------------------------------------------------------------------------------#
 # PLOT A: Correlation with Multiplicity
 #------------------------------------------------------------------------------#
 p_mult <- ggplot(mutation_correlation_data, aes(x = avg_multiplicity, y = mean_z)) +
-  geom_point(alpha = 0.2, colour = "grey30") +
-  geom_smooth(method = "lm", colour = "#D7191C", fill = "pink") +
-  theme_cowplot() +
+  geom_point(shape = 21, fill = scatter_col, colour = "white",
+             size = 2, alpha = 0.4, stroke = 0.3) +
+  # geom_point(alpha = 0.2, colour = scatter_col) +
+  geom_smooth(method = "lm", colour = wt_col, fill = horiz_line_col) +
+  theme_mres_frankell() +
+  annotate("text", 
+           x = Inf, y = Inf, 
+           label = get_corr_label(mutation_correlation_data, "avg_multiplicity"),
+           hjust = 1.05, vjust = 1.5, 
+           size = 3.5) +
   labs(
-    title = "Shedding vs multiplicity",
-    subtitle = get_corr_label(mutation_correlation_data, "avg_multiplicity"),
     x = "Mean multiplicity",
     y = "Mean CCF z-score"
   )
@@ -93,13 +100,17 @@ p_mult <- ggplot(mutation_correlation_data, aes(x = avg_multiplicity, y = mean_z
 # PLOT B: Correlation with Major Copy Number
 #------------------------------------------------------------------------------#
 p_cn <- ggplot(mutation_correlation_data, aes(x = avg_major_cn, y = mean_z)) +
-  geom_point(alpha = 0.2, colour = "grey30") +
-  geom_smooth(method = "lm", colour = "#D7191C", fill = "pink") +
-  theme_cowplot() +
+  geom_point(shape = 21, fill = scatter_col, colour = "white",
+             size = 2, alpha = 0.4, stroke = 0.3) +
+  geom_smooth(method = "lm", colour = wt_col, fill = horiz_line_col) +
+  theme_mres_frankell() +
+  annotate("text", 
+           x = Inf, y = Inf, 
+           label = get_corr_label(mutation_correlation_data, "avg_major_cn"),
+           hjust = 1.05, vjust = 1.5, 
+           size = 3.5) +
   labs(
-    title = "Shedding vs major copy number",
-    subtitle = get_corr_label(mutation_correlation_data, "avg_major_cn"),
-    x = "Avg major CN",
+    x = "Mean major copy number",
     y = "Mean CCF z-score"
   )
 
@@ -107,12 +118,16 @@ p_cn <- ggplot(mutation_correlation_data, aes(x = avg_major_cn, y = mean_z)) +
 # PLOT C: Correlation with Depth
 #------------------------------------------------------------------------------#
 p_depth <- ggplot(mutation_correlation_data, aes(x = avg_depth, y = mean_z)) +
-  geom_point(alpha = 0.2, colour = "grey30") +
-  geom_smooth(method = "lm", colour = "#D7191C", fill = "pink") +
-  theme_cowplot() +
+  geom_point(shape = 21, fill = scatter_col, colour = "white",
+             size = 2, alpha = 0.4, stroke = 0.3) +
+  geom_smooth(method = "lm", colour = wt_col, fill = horiz_line_col) +
+  theme_mres_frankell() +
+  annotate("text", 
+           x = Inf, y = Inf, 
+           label = get_corr_label(mutation_correlation_data, "avg_depth"),
+           hjust = 1.05, vjust = 1.5, 
+           size = 3.5) +
   labs(
-    title = "Shedding vs depth",
-    subtitle = get_corr_label(mutation_correlation_data, "avg_depth"),
     x = "Depth",
     y = "Mean CCF z-score"
   )
@@ -121,11 +136,12 @@ p_depth <- ggplot(mutation_correlation_data, aes(x = avg_depth, y = mean_z)) +
 # PLOT D: TNC Motif
 #------------------------------------------------------------------------------#
 p_tnc <- ggplot(mutation_correlation_data, aes(x = reorder(tnc, mean_z, FUN = median), y = mean_z)) +
-  geom_boxplot(outlier.size = 0.5, fill = "grey90") +
+  geom_boxplot(outlier.size = 0.5, fill = scatter_col) +
   geom_hline(yintercept = 0, linetype = "dashed", colour = "black") +
-  theme_cowplot() +
+  theme_mres_frankell() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 6)) +
-  labs(title = "Shedding distribution by TNC motif", x = "Trinucleotide context", y = "Mean CCF z-score")
+  labs(x = "Trinucleotide context",
+       y = "Mean CCF z-score")
 
 #------------------------------------------------------------------------------#
 # Combine and save
@@ -133,6 +149,9 @@ p_tnc <- ggplot(mutation_correlation_data, aes(x = reorder(tnc, mean_z, FUN = me
 rule_out_2x2_plots <- plot_grid(p_mult, p_cn, p_depth, p_tnc, ncol = 2, align = "hv")
 
 ggsave(paste0(outputs.folder, "shedding_vs_technical_features.pdf"),
+       rule_out_2x2_plots, width = 12, height = 10)
+
+ggsave(paste0(outputs.folder, "shedding_vs_technical_features.svg"),
        rule_out_2x2_plots, width = 12, height = 10)
 
 #==============================================================================#

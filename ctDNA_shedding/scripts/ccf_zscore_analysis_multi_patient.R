@@ -12,6 +12,7 @@
 # Date: 2026-03-16
 
 setwd("/Volumes/RFS/rfs-kh_rfs-rDsHEAv2WP0/hannah/MRes_Rotation_Hannah/ctDNA_shedding/")
+source("scripts/plot_theme_mres_frankell.R")
 
 ####################################################
 #### Source required functions & load libraries ####
@@ -144,8 +145,8 @@ patient_plots <- lapply(top10_patients, function(pat) {
     samp_label <- paste0(unique(samp_data$days_post_surgery), " days post surgery")
     
     ggplot(samp_data, aes(x = ccf_z_score)) +
-      geom_histogram(binwidth = 0.3, fill = "#2C7BB6", colour = "white", alpha = 0.8) +
-      geom_vline(xintercept = 0, linetype = "dashed", colour = "black") +
+      geom_histogram(binwidth = 0.3, fill = scatter_col, colour = "white", alpha = 0.8) +
+      geom_vline(xintercept = 0, linetype = "dashed", colour = wt_col) +
       xlim(-3, 3) +
       theme_cowplot(font_size = 12) +
       labs(x = "CCF z-score", y = "Count", title = samp_label)
@@ -175,6 +176,8 @@ final_plot <- plot_grid(overall_title,
                         ncol = 1, rel_heights = c(0.02, 1))
 
 ggsave(paste0(outputs.folder, "top10_patients_zscore_histograms.pdf"),
+       final_plot, width = 18, height = 20)
+ggsave(paste0(outputs.folder, "top10_patients_zscore_histograms.svg"),
        final_plot, width = 18, height = 20)
 
 ######################################################################################
@@ -443,9 +446,9 @@ ggplot(mutation_summary, aes(x = patient, y = mean_z, colour = sig)) +
                 width = 0.02,
                 linewidth = 0.4) +
   
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = horiz_line_col) +
   scale_colour_manual(
-    values = c("FALSE" = "grey50", "TRUE" = "#D7191C"),
+    values = c("FALSE" = wt_col, "TRUE" = mut_col),
     labels = c("Not significant", "Significant"),
     name = "Z ≠ 0"
   ) +
@@ -459,6 +462,8 @@ ggplot(mutation_summary, aes(x = patient, y = mean_z, colour = sig)) +
   ggtitle("CCF z-score distribution per patient (6-sample patients)")
 
 ggsave(paste0(outputs.folder, "ccf_zscore_violin.pdf"),
+       width = 8, height = 6)
+ggsave(paste0(outputs.folder, "ccf_zscore_violin.svg"),
        width = 8, height = 6)
 
 # Examine the significant mutations from those 6-sample patients ####
@@ -554,7 +559,8 @@ final_spearman_grid <- plot_grid(overall_title,
 ggsave(paste0(outputs.folder, "spearman_2sample_patients_4x4.pdf"),
        final_spearman_grid, width = 10, height = 10)
 
-
+ggsave(paste0(outputs.folder, "spearman_2sample_patients_4x4.svg"),
+       final_spearman_grid, width = 10, height = 10)
 
 
 
