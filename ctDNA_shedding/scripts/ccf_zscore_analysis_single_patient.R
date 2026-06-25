@@ -23,7 +23,8 @@ library(data.table)
 library(dplyr) 
 library(ggplot2) 
 library(cowplot) 
-library(RColorBrewer) 
+library(RColorBrewer)
+library(svglite)
 
 #############################################
 #### Make a folder for this analysis run ####
@@ -53,6 +54,22 @@ ctDNA_data_path <- "data/20260307_tracked_mutations_primary_and_met_data_eclipse
 # Read in table
 ctDNA_data <- read_fst(ctDNA_data_path)
 
+# Load the LTX to CRUK conversion table
+publication_key <- read.delim("data/tracerxPublicationKey_170221.txt", stringsAsFactors = FALSE)
+
+publication_key_min <- publication_key %>%
+  mutate(
+    ShorterID = paste0(
+      "LTX",
+      sprintf("%03d", as.numeric(sub("^LTX0*", "", SampleID)))
+    )
+  )
+
+# Convert patient ID to CRUK ID
+ctDNA_data <- ctDNA_data %>%
+  left_join(publication_key_min, by = c("patient" = "ShorterID")) %>%
+  mutate(patient = PublicationID) %>%
+  select(-PublicationID)
 
 #######################################################
 #### Filter data to keep clonal high ppm mutations ####
@@ -78,24 +95,24 @@ ctDNA_data_pos_multiple <- ctDNA_data_pos %>%
 n_patients_multiple <- length(unique(ctDNA_data_pos_multiple$patient))
 
 
-
 ##################################################
 #### How many samples does each patient have? ####
 ################################################## 
 
 samples_per_patient <- ctDNA_data_pos %>%
-  group_by(patient_name) %>%
+  group_by(patient) %>%
   summarise(n_samples = n_distinct(sample)) %>%
   arrange(desc(n_samples))
 
-ggplot(samples_per_patient, aes(x = reorder(patient_name, -n_samples), y = n_samples)) +
-  geom_bar(stat = "identity", fill = "#2C7BB6") +
+ggplot(samples_per_patient, aes(x = reorder(patient, -n_samples), y = n_samples)) +
+  geom_bar(stat = "identity", fill = "#7EB5D6") +
   theme_cowplot() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 6)) +
   labs(x = "Patient", y = "Number of samples", 
        title = "Samples per patient (clonal, ctDNA+, post-surgery, high ppm)")
 
-ggsave(paste0(outputs.folder, "samples_per_patient.pdf"), width = 10, height = 5)
+ggsave(paste0(outputs.folder, "samples_per_patient.pdf"), width = 10, height = 6)
+ggsave(paste0(outputs.folder, "samples_per_patient.svg"), width = 10, height = 6)
 
 #############################################################################################
 #### Analysis 1: mutation shedding analysis on one single sample from one single patient ####

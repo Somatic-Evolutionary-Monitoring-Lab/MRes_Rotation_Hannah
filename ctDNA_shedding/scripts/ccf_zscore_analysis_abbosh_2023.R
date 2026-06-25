@@ -25,6 +25,7 @@ library(RColorBrewer)
 library(tidyr)
 library(readxl)
 library(svglite)
+source("scripts/plot_theme_mres_frankell.R")
 
 # -----------------------------------------------------------------------------
 # Make a folder for this analysis run
@@ -107,13 +108,14 @@ p <- ctDNA_data_abbosh_pos_multiple %>%
   arrange(desc(n)) %>%
   mutate(PublicationID = factor(PublicationID, levels = PublicationID)) %>%
   ggplot(aes(x = PublicationID, y = n)) +
-  geom_bar(stat = "identity", fill = "#2C7BB6") +
+  geom_bar(stat = "identity", fill = "#7EB5D6") +
   theme_cowplot() +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8)) +
   labs(x = "Patient", y = "Number of samples",
        title = "Samples per patient (clonal, ctDNA+, post-surgery, high ppm) — Abbosh et al. 2023")
 
 ggsave(paste0(outputs.folder, "samples_per_patient_abbosh.pdf"), p, width = 10, height = 6)
+ggsave(paste0(outputs.folder, "samples_per_patient_abbosh.svg"), p, width = 10, height = 6)
 
 # -----------------------------------------------------------------------------
 # Z-score histograms for top 10 patients (rows x samples)
@@ -141,13 +143,13 @@ patient_plots <- lapply(top10_patients, function(pat) {
   sample_plots <- lapply(timepoints, function(tp) {
     tp_data <- pat_data %>% filter(days_post_surgery == tp)
     
-    samp_label <- paste0(tp, " days post surgery")
+    samp_label <- paste0(tp, " days")
     
     ggplot(tp_data, aes(x = ccf_z_score)) +
-      geom_histogram(binwidth = 0.3, fill = "#2C7BB6", colour = "white", alpha = 0.8) +
+      geom_histogram(binwidth = 0.3, fill = "#7EB5D6", colour = "white", alpha = 0.8) +
       geom_vline(xintercept = 0, linetype = "dashed", colour = "black") +
       xlim(-3, 3) +
-      theme_cowplot(font_size = 12) +
+      theme_cowplot(font_size = 14) +
       labs(x = "CCF z-score", y = "Count", title = samp_label)
   })
   
@@ -161,7 +163,7 @@ patient_plots <- lapply(top10_patients, function(pat) {
   
   row   <- plot_grid(plotlist = sample_plots, nrow = 1)
   title <- ggdraw() + draw_label(paste0("Patient ", pat),
-                                 fontface = "bold", x = 0.01, hjust = 0, size = 14)
+                                 fontface = "bold", x = 0.01, hjust = 0, size = 16)
   plot_grid(title, row, ncol = 1, rel_heights = c(0.1, 1))
 })
 
@@ -174,7 +176,7 @@ final_plot <- plot_grid(overall_title,
                         plot_grid(plotlist = patient_plots, ncol = 1),
                         ncol = 1, rel_heights = c(0.02, 1))
 
-ggsave(paste0(outputs.folder, "top10_patients_zscore_histograms.pdf"),
+ggsave(paste0(outputs.folder, "top10_patients_zscore_histograms_abbosh.pdf"),
        final_plot, width = 18, height = 20)
 
 # -----------------------------------------------------------------------------
@@ -250,6 +252,8 @@ final_spearman_grid <- plot_grid(overall_title,
 
 ggsave(paste0(outputs.folder, "spearman_2sample_patients_4x4_abbosh.pdf"),
        final_spearman_grid, width = 10, height = 10)
+ggsave(paste0(outputs.folder, "spearman_2sample_patients_4x4_abbosh.svg"),
+       final_spearman_grid, width = 10, height = 10)
 
 # -----------------------------------------------------------------------------
 # Violin plot: mutation-level CCF z-scores for patients with >= 6 timepoints
@@ -305,7 +309,7 @@ ggplot(mutation_summary_abbosh, aes(x = PublicationID, y = mean_z, colour = sig)
   geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
   
   scale_colour_manual(
-    values = c("FALSE" = "grey50", "TRUE" = "#D7191C"),
+    values = c("FALSE" = "grey50", "TRUE" = "#E8829A"),
     labels = c("Not significant", "Significant"),
     name   = "Z ≠ 0"
   ) +
@@ -322,6 +326,8 @@ ggplot(mutation_summary_abbosh, aes(x = PublicationID, y = mean_z, colour = sig)
 
 ggsave(paste0(outputs.folder, "ccf_zscore_violin_abbosh.pdf"),
        width = 8, height = 6)
+ggsave(paste0(outputs.folder, "ccf_zscore_violin_abbosh.svg"),
+       width = 8, height = 6)
 
 
 # Extract significant mutations from >= 6 timepoint patients
@@ -334,6 +340,46 @@ ctDNA_data_abbosh_pos_multiple <- ctDNA_data_abbosh_pos_multiple %>%
                  sig_mutations_6sample_abbosh$pure_mutation_id, sep = "_"))
 
 table(ctDNA_data_abbosh_pos_multiple$sig_6samples)
+
+
+# ---------------------
+
+
+pos <- position_jitter(width = 0.25, seed = 42)
+ggplot(mutation_summary_abbosh, aes(x = PublicationID, y = mean_z, colour = sig)) +
+  
+  geom_violin(fill = "grey90", colour = "grey60", width = 0.8) +
+  
+  geom_point(data = filter(mutation_summary_abbosh, sig == FALSE),
+             position = pos, size = 1.2, alpha = 0.6) +
+  
+  geom_point(data = filter(mutation_summary_abbosh, sig == TRUE),
+             position = pos, size = 1.6, alpha = 1) +
+  
+  geom_errorbar(data = filter(mutation_summary_abbosh, sig == TRUE),
+                aes(ymin = ci_lower, ymax = ci_upper),
+                position = pos,
+                width = 0.02,
+                linewidth = 0.4) +
+  
+  geom_hline(yintercept = 0, linetype = "dashed", colour = horiz_line_col) +
+  
+  scale_colour_manual(
+    values = c("FALSE" = wt_col, "TRUE" = mut_col),
+    labels = c("Not significant", "Significant"),
+    name   = "Z ≠ 0"
+  ) +
+  labs(x = "Patient", y = "Mean CCF z-score") +
+  ggtitle("CCF z-score distribution per patient — Abbosh et al. 2023") +
+  theme_cowplot() +
+  theme(
+    legend.position = "top",
+    axis.text       = element_text(size = 11),
+    axis.title      = element_text(size = 14),
+  )
+
+ggsave(paste0(outputs.folder, "ccf_zscore_violin_abbosh.pdf"), width = 10, height = 6)
+ggsave(paste0(outputs.folder, "ccf_zscore_violin_abbosh.svg"), width = 10, height = 6)
 
 # -----------------------------------------------------------------------------
 # Save final dataframe

@@ -74,7 +74,13 @@ mutation_correlation_data <- ctDNA_data_pos_multiple %>%
 # Define function to calculate correlation for plot labels
 get_corr_label <- function(df, var_x) {
   res <- cor.test(df[[var_x]], df$mean_z, method = "spearman")
-  paste0("\u03c1 = ", round(res$estimate, 3), ", p = ", signif(res$p.value, 3))
+  p <- res$p.value
+  rho <- round(res$estimate, 3)
+  if (p < 0.01) {
+    paste0("rho = ", rho, ", p < 0.01")
+  } else {
+    paste0("rho = ", rho, ", p = ", signif(p, 3))
+  }
 }
 
 #------------------------------------------------------------------------------#
@@ -90,7 +96,7 @@ p_mult <- ggplot(mutation_correlation_data, aes(x = avg_multiplicity, y = mean_z
            x = Inf, y = Inf, 
            label = get_corr_label(mutation_correlation_data, "avg_multiplicity"),
            hjust = 1.05, vjust = 1.5, 
-           size = 3.5) +
+           size = 5) +
   labs(
     x = "Mean multiplicity",
     y = "Mean CCF z-score"
@@ -108,7 +114,7 @@ p_cn <- ggplot(mutation_correlation_data, aes(x = avg_major_cn, y = mean_z)) +
            x = Inf, y = Inf, 
            label = get_corr_label(mutation_correlation_data, "avg_major_cn"),
            hjust = 1.05, vjust = 1.5, 
-           size = 3.5) +
+           size = 5) +
   labs(
     x = "Mean major copy number",
     y = "Mean CCF z-score"
@@ -126,7 +132,7 @@ p_depth <- ggplot(mutation_correlation_data, aes(x = avg_depth, y = mean_z)) +
            x = Inf, y = Inf, 
            label = get_corr_label(mutation_correlation_data, "avg_depth"),
            hjust = 1.05, vjust = 1.5, 
-           size = 3.5) +
+           size = 5) +
   labs(
     x = "Depth",
     y = "Mean CCF z-score"

@@ -12,6 +12,7 @@
 # Date: 2026-04-28
 
 setwd("/Volumes/RFS/rfs-kh_rfs-rDsHEAv2WP0/hannah/MRes_Rotation_Hannah/ctDNA_shedding/")
+source("scripts/plot_theme_mres_frankell.R")
 
 # -----------------------------------------------------------------------------
 # Source required functions & load libraries
@@ -116,13 +117,11 @@ plot_ref_vs_nuc <- function(ctDNA_data, mut_gr, nuc_map, map_label) {
   ctDNA_matched <- ctDNA_data %>% filter(!is.na(nuc_occupancy))
   
   p <- ggplot(ctDNA_matched, aes(x = nuc_occupancy, y = REF_norm)) +
-    geom_point(alpha = 0.1, size = 0.8) +
-    geom_smooth(method = "lm", colour = "firebrick", linewidth = 0.8, se = TRUE) +
-    stat_cor(method = "spearman", colour = "firebrick") +
+    geom_point(alpha = 0.05, size = 0.8) +
+    geom_smooth(method = "lm", colour = mut_col, linewidth = 0.8, se = TRUE) +
+    stat_cor(method = "spearman") +
     labs(x = "Normalised nucleosome occupancy",
-         y = "Normalised REF depth",
-         title = map_label,
-         subtitle = paste0("n = ", nrow(ctDNA_matched), " mutations")) +
+         y = "Normalised ref depth") +
     theme_cowplot(font_size = 14)
   
   return(p)
@@ -133,24 +132,7 @@ p_70yo        <- plot_ref_vs_nuc(ctDNA_data, mut_gr, nuc_healthy_70yo, "70yo cfD
 p_25yo        <- plot_ref_vs_nuc(ctDNA_data, mut_gr, nuc_healthy_25yo, "25yo cfDNA (Teo et al. 2018)")
 p_bcell       <- plot_ref_vs_nuc(ctDNA_data, mut_gr, nuc_bcell,        "B cell MNase-seq (Gaffney et al. 2012)")
 
-# Combined multi-panel figure
-nuc_combined <- plot_grid(
-  p_70yo, p_25yo,
-  p_bcell, NULL,
-  ncol = 2,
-  labels = c("A", "B", "C", ""),
-  label_size = 16
-)
-
-ggsave(paste0(outputs.folder, "REF_norm_vs_nucleosome_maps_abbosh.pdf"), nuc_combined, width = 10, height = 8)
-ggsave(paste0(outputs.folder, "REF_norm_nucleosome_maps_abbosh.svg"), nuc_combined, width = 10, height = 8)
-
-
-# -----------------------------------------------------------------------------
-# REF depth vs blood ATAC-seq score
-# -----------------------------------------------------------------------------
-
-# Fix chromosome naming
+# ATAC-seq panel
 blood_atac_peaks[, Chr := paste0("chr", Chr)]
 
 atac_gr <- GRanges(seqnames = blood_atac_peaks$Chr,
@@ -166,25 +148,21 @@ ctDNA_data$atac_score[queryHits(hits_atac)] <- atac_gr$atac_score[subjectHits(hi
 ctDNA_matched_atac <- ctDNA_data %>% filter(!is.na(atac_score))
 
 p_atac <- ggplot(ctDNA_matched_atac, aes(x = atac_score, y = REF_norm)) +
-  geom_point(alpha = 0.2, size = 0.8) +
-  geom_smooth(method = "lm", colour = "firebrick", linewidth = 0.8, se = TRUE) +
-  stat_cor(method = "spearman", colour = "firebrick") +
-  labs(x = "Blood ATAC-seq peak score (Corces et al. 2016)",
-       y = "Normalised REF depth",
-       subtitle = paste0("n = ", nrow(ctDNA_matched_atac), " mutations")) +
-  theme_cowplot(font_size = 11)
-
-ggsave(paste0(outputs.folder, "ATAC_REF_norm_vs_atac_score_abbosh.pdf"), p_atac, width = 6, height = 5)
-ggsave(paste0(outputs.folder, "ATAC_REF_norm_vs_atac_score_abbosh.svg"), p_atac, width = 6, height = 5)
-
-p_atac
+  geom_point(alpha = 0.05, size = 0.8) +
+  geom_smooth(method = "lm", colour = mut_col, linewidth = 0.8, se = TRUE) +
+  stat_cor(method = "spearman") +
+  labs(x = "ATAC-seq peak score",
+       y = "Normalised ref depth") +
+  theme_cowplot(font_size = 14)
 
 
+# Combined multi-panel figure
+nuc_combined <- plot_grid(
+  p_70yo, p_25yo,
+  p_bcell, p_atac,
+  ncol = 2
+)
 
-
-
-
-
-
-
+ggsave(paste0(outputs.folder, "REF_norm_vs_nucleosome_maps_abbosh.pdf"), nuc_combined, width = 10, height = 8)
+ggsave(paste0(outputs.folder, "REF_norm_nucleosome_maps_abbosh.svg"), nuc_combined, width = 10, height = 8)
 

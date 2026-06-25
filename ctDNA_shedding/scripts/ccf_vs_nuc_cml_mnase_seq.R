@@ -2,9 +2,9 @@
 #==============================================================================#
 ######                                                                    ######
 ######  Map high/low shedding mutations to CML MNase-seq nucleosome map   ######
-######  K562 cell line (Kundaje et al. 2012, Genome Research)             ######
+######  K562 cell line (ENCSR000CXQ)                                      ######
 ######  Analyses: single base occupancy, 80bp window, dyad distance,      ######
-######  nucleosome vs linker binary comparison                             ######
+######  nucleosome vs linker binary comparison                            ######
 ######                                                                    ######
 #==============================================================================#
 #==============================================================================#
@@ -13,6 +13,7 @@
 # Date: 2026-05-13
 
 setwd("/Volumes/RFS/rfs-kh_rfs-rDsHEAv2WP0/hannah/MRes_Rotation_Hannah/ctDNA_shedding/")
+source("scripts/plot_theme_mres_frankell.R")
 
 # -----------------------------------------------------------------------------
 # Source required functions & load libraries
@@ -85,7 +86,7 @@ mutation_summary <- ctDNA_data_black %>%
     ci_lower = mean_z - 1.96 * se_z,
     ci_upper = mean_z + 1.96 * se_z,
     n_samples = n(),
-    sig_6samples = first(sig_6samples),
+    sig_6samples = dplyr::first(sig_6samples),
     .groups = "drop"
   ) %>%
   tidyr::separate(Pos, into = c("chr_num", "pos", "ref", "alt"),
@@ -124,17 +125,15 @@ cor_singlebase <- cor.test(mutation_summary$k562_nuc_occ, mutation_summary$mean_
 
 # Single base occupancy scatter
 ggplot(mutation_summary, aes(x = k562_nuc_occ, y = mean_z)) +
-  geom_point(alpha = 0.3, size = 0.8, colour = scatter_col) +
+  geom_point(alpha = 0.3, size = 1.5, colour = scatter_col) +
   geom_hline(yintercept = 0, linetype = "dashed", colour = horiz_line_col) +
   annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("\u03C1 = ", round(cor_singlebase$estimate, 3),
-                          "\np = ", format(cor_singlebase$p.value, scientific = TRUE, digits = 2),
-                          "\nn = ", nrow(mutation_summary)),
-           size = 5) +
-  labs(x = "K562 MNase-seq nucleosome occupancy",
-       y = "Mean CCF z-score",
-       title = "CML MNase-seq (Kundaje et al. 2012)") +
-  theme_mres_frankell()
+           label = paste0("rho = ", round(cor_singlebase$estimate, 3),
+                          "\np = ", format(cor_singlebase$p.value, scientific = TRUE, digits = 2)),
+           size = 7) +
+  labs(x = "MNase-seq nucleosome occupancy",
+       y = "Mean CCF z-score") +
+  theme_cowplot(font_size = 20)
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_cml_nuc_occ_singlebase.pdf"),
        width = 7, height = 6)
@@ -185,18 +184,15 @@ cor_dyad <- cor.test(mutation_summary$dist_to_dyad, mutation_summary$mean_z,
 
 # Dyad distance scatter
 ggplot(mutation_summary %>% filter(dist_to_dyad < 900), aes(x = dist_to_dyad, y = mean_z)) +
-  geom_point(alpha = 0.3, size = 0.8, colour = scatter_col) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "#9BA8B5") +
-  geom_vline(xintercept = 80, linetype = "dashed", colour = "#9BA8B5") +
+  geom_point(alpha = 0.3, size = 1.2, colour = scatter_col) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = horiz_line_col) +
   annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("\u03C1 = ", round(cor_dyad$estimate, 3),
-                          "\np = ", format(cor_dyad$p.value, scientific = FALSE, digits = 2),
-                          "\nn = ", nrow(mutation_summary)),
-           size = 5) +
-  labs(x = "Distance to nearest K562 nucleosome dyad (bp)",
-       y = "Mean CCF z-score",
-       title = "CML MNase-seq dyad distance (Kundaje et al. 2012)") +
-  theme_mres_frankell()
+           label = paste0("rho = ", round(cor_dyad$estimate, 3),
+                          "\np = ", format(cor_dyad$p.value, scientific = FALSE, digits = 2)),
+           size = 7) +
+  labs(x = "Distance to nearest nucleosome dyad (bp)",
+       y = "Mean CCF z-score") +
+  theme_cowplot(font_size = 20)
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_cml_dyad_distance.pdf"),
        width = 7, height = 6)
@@ -219,10 +215,9 @@ ggplot(mutation_summary, aes(x = nucleosome_region, y = mean_z, fill = nucleosom
   scale_fill_manual(values = c("Nucleosome" = high_col, "Linker" = low_col)) +
   annotate("text", x = 1.5, y = max(mutation_summary$mean_z) * 0.9,
            label = paste0("p = ", format(wilcox_result$p.value, scientific = FALSE, digits = 2)),
-           size = 5) +
-  labs(x = "", y = "Mean CCF z-score",
-       title = "CCF z-score by chromatin region\n(CML MNase-seq, Kundaje et al. 2012)") +
-  theme_mres_frankell() +
+           size = 7) +
+  labs(x = "", y = "Mean CCF z-score") +
+  theme_cowplot(font_size = 20) +
   theme(legend.position = "none")
 
 ggsave(paste0(outputs.folder, "ccf_zscore_cml_nucleosome_vs_linker_boxplot.pdf"),
@@ -247,7 +242,7 @@ mutation_summary_abbosh <- ctDNA_data_abbosh %>%
     ci_lower     = mean_z - 1.96 * se_z,
     ci_upper     = mean_z + 1.96 * se_z,
     n_samples    = n(),
-    sig_6samples = first(sig_6samples),
+    sig_6samples = dplyr::first(sig_6samples),
     .groups      = "drop"
   ) %>%
   tidyr::separate(pure_mutation_id,
@@ -289,17 +284,15 @@ cor_singlebase_abbosh <- cor.test(mutation_summary_abbosh$k562_nuc_occ,
 
 # Single base occupancy scatter
 ggplot(mutation_summary_abbosh, aes(x = k562_nuc_occ, y = mean_z)) +
-  geom_point(alpha = 0.3, size = 0.8, colour = scatter_col) +
+  geom_point(alpha = 0.3, size = 1.2, colour = scatter_col) +
   geom_hline(yintercept = 0, linetype = "dashed", colour = horiz_line_col) +
   annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("\u03C1 = ", round(cor_singlebase_abbosh$estimate, 3),
-                          "\np = ", format(cor_singlebase_abbosh$p.value, scientific = TRUE, digits = 2),
-                          "\nn = ", nrow(mutation_summary_abbosh)),
-           size = 5) +
-  labs(x = "K562 MNase-seq nucleosome occupancy",
-       y = "Mean CCF z-score",
-       title = "CML MNase-seq (Kundaje et al. 2012)\nAbbosh et al. 2023") +
-  theme_mres_frankell()
+           label = paste0("rho = ", round(cor_singlebase_abbosh$estimate, 3),
+                          "\np = ", format(cor_singlebase_abbosh$p.value, scientific = TRUE, digits = 2)),
+           size = 7) +
+  labs(x = "MNase-seq nucleosome occupancy",
+       y = "Mean CCF z-score") +
+  theme_cowplot(font_size = 20)
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_cml_nuc_occ_singlebase_abbosh.pdf"),
        width = 7, height = 6)
@@ -348,18 +341,15 @@ cor_dyad_abbosh <- cor.test(mutation_summary_abbosh$dist_to_dyad,
 
 # Dyad distance scatter
 ggplot(mutation_summary_abbosh %>% filter(dist_to_dyad < 900), aes(x = dist_to_dyad, y = mean_z)) +
-  geom_point(alpha = 0.3, size = 0.8, colour = scatter_col) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "#9BA8B5") +
-  geom_vline(xintercept = 80, linetype = "dashed", colour = "#9BA8B5") +
+  geom_point(alpha = 0.3, size = 1.2, colour = scatter_col) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = horiz_line_col) +
   annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
-           label = paste0("\u03C1 = ", round(cor_dyad_abbosh$estimate, 3),
-                          "\np = ", format(cor_dyad_abbosh$p.value, scientific = FALSE, digits = 2),
-                          "\nn = ", nrow(mutation_summary_abbosh)),
-           size = 5) +
-  labs(x = "Distance to nearest K562 nucleosome dyad (bp)",
-       y = "Mean CCF z-score",
-       title = "CML MNase-seq dyad distance (Kundaje et al. 2012)\nAbbosh et al. 2023") +
-  theme_mres_frankell()
+           label = paste0("rho = ", round(cor_dyad_abbosh$estimate, 3),
+                          "\np = ", format(cor_dyad_abbosh$p.value, scientific = FALSE, digits = 2)),
+           size = 7) +
+  labs(x = "Distance to nearest nucleosome dyad (bp)",
+       y = "Mean CCF z-score") +
+  theme_cowplot(font_size = 20)
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_cml_dyad_distance_abbosh.pdf"),
        width = 7, height = 6)
@@ -382,10 +372,9 @@ ggplot(mutation_summary_abbosh, aes(x = nucleosome_region, y = mean_z, fill = nu
   scale_fill_manual(values = c("Nucleosome" = high_col, "Linker" = low_col)) +
   annotate("text", x = 1.5, y = max(mutation_summary_abbosh$mean_z) * 0.9,
            label = paste0("p = ", format(wilcox_result_abbosh$p.value, scientific = FALSE, digits = 2)),
-           size = 5) +
-  labs(x = "", y = "Mean CCF z-score",
-       title = "CCF z-score by chromatin region\n(CML MNase-seq, Kundaje et al. 2012)\nAbbosh et al. 2023") +
-  theme_mres_frankell() +
+           size = 7) +
+  labs(x = "", y = "Mean CCF z-score") +
+  theme_cowplot(font_size = 20) +
   theme(legend.position = "none")
 
 ggsave(paste0(outputs.folder, "ccf_zscore_cml_nucleosome_vs_linker_boxplot_abbosh.pdf"),

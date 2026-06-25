@@ -12,6 +12,7 @@
 # Date: 2026-03-18
 
 setwd("/Volumes/RFS/rfs-kh_rfs-rDsHEAv2WP0/hannah/MRes_Rotation_Hannah/ctDNA_shedding/")
+source("scripts/plot_theme_mres_frankell.R")
 
 ####################################################
 #### Source required functions & load libraries ####
@@ -24,6 +25,7 @@ library(ggplot2)
 library(cowplot)
 library(RColorBrewer)
 library(tidyr)
+library(svglite)
 
 #############################################
 #### Make a folder for this analysis run ####
@@ -41,6 +43,18 @@ if (!file.exists(out_dir_logs)) dir.create(out_dir_logs)
 
 outputs.folder <- paste0(out_dir_general, "/", date, "/")
 if (!file.exists(outputs.folder)) dir.create(outputs.folder)
+
+##############################################
+#### Helper functions ####
+##############################################
+
+format_p <- function(p) {
+  if (p < 0.01) {
+    format(p, scientific = TRUE, digits = 2)
+  } else {
+    format(round(p, 3), scientific = FALSE)
+  }
+}
 
 ##############################################
 #### Get Inputs required for all analyses ####
@@ -96,7 +110,7 @@ mutation_summary_all <- ctDNA_data %>%
     ci_lower = mean_z - 1.96 * se_z,
     ci_upper = mean_z + 1.96 * se_z,
     n_samples = n(),
-    sig_6samples = first(sig_6samples),
+    sig_6samples = dplyr::first(sig_6samples),
     .groups = "drop"
   ) %>%
   tidyr::separate(Pos, into = c("chr_num", "pos", "ref", "alt"),
@@ -174,25 +188,19 @@ make_plot <- function(dt, cor_result, colour, title) {
     geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
     annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
              label = paste0("rho = ", round(cor_result$estimate, 3),
-                            "\np = ", format(cor_result$p.value, scientific = TRUE, digits = 2),
-                            "\nn = ", sum(!is.na(dt$nuc_occupancy))),
+                            "\np = ", format_p(cor_result$p.value)),
              size = 5) +
-    labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score across timepoints",
+    labs(x = "Normalised nucleosome occupancy", y = "Mean CCF z-score", # Mean CCF z-score across timepoints
          title = title) +
     theme_cowplot(font_size = 14)
 }
 
-p_lung_ma     <- make_plot(mut_lung_ma,     cor_lung_ma,     "#D7191C", "Lung cancer cfDNA (Ma et al. 2017)")
-p_lung_snyder <- make_plot(mut_lung_snyder, cor_lung_snyder, "#FD8D3C", "Lung cancer cfDNA (Snyder et al. 2016)")
-p_25yo        <- make_plot(mut_25yo,        cor_25yo,        "#2C7BB6", "Healthy 25yo cfDNA (Teo et al. 2018)")
-p_70yo        <- make_plot(mut_70yo,        cor_70yo,        "#1A9641", "Healthy 70yo cfDNA (Teo et al. 2018)")
-p_bcell       <- make_plot(mut_bcell,       cor_bcell,       "#762A83", "B cell MNase-seq (Gaffney et al. 2012)")
+p_lung_ma     <- make_plot(mut_lung_ma,     cor_lung_ma,     high_col, "Lung cancer cfDNA")
+p_lung_snyder <- make_plot(mut_lung_snyder, cor_lung_snyder, high_col, "Lung cancer cfDNA")
+p_25yo        <- make_plot(mut_25yo,        cor_25yo,        mut_col, "Healthy 25yo cfDNA")
+p_70yo        <- make_plot(mut_70yo,        cor_70yo,        mut_col, "Healthy 70yo cfDNA")
+p_bcell       <- make_plot(mut_bcell,       cor_bcell,       mut_col, "B cell MNase-seq")
 
-multi_panel <- plot_grid(p_lung_ma, p_lung_snyder, p_25yo, p_70yo, p_bcell,
-                         ncol = 3, labels = c("A", "B", "C", "D", "E"))
-
-ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_all_maps.pdf"),
-       multi_panel, width = 15, height = 10)
 
 ################################################################################################
 #### sig_6samples subset                                                                    ####
@@ -210,14 +218,14 @@ cor_sig_25yo        <- run_cor(sig_25yo)
 cor_sig_70yo        <- run_cor(sig_70yo)
 cor_sig_bcell       <- run_cor(sig_bcell)
 
-p_sig_lung_ma     <- make_plot(sig_lung_ma,     cor_sig_lung_ma,     "#D7191C", "Lung cancer cfDNA (Ma et al. 2017)")
-p_sig_lung_snyder <- make_plot(sig_lung_snyder, cor_sig_lung_snyder, "#FD8D3C", "Lung cancer cfDNA (Snyder et al. 2016)")
-p_sig_25yo        <- make_plot(sig_25yo,        cor_sig_25yo,        "#2C7BB6", "Healthy 25yo cfDNA (Teo et al. 2018)")
-p_sig_70yo        <- make_plot(sig_70yo,        cor_sig_70yo,        "#1A9641", "Healthy 70yo cfDNA (Teo et al. 2018)")
-p_sig_bcell       <- make_plot(sig_bcell,       cor_sig_bcell,       "#762A83", "B cell MNase-seq (Gaffney et al. 2012)")
+p_sig_lung_ma     <- make_plot(sig_lung_ma,     cor_sig_lung_ma,     high_col, "Lung cancer cfDNA") # Ma et al 2017
+p_sig_lung_snyder <- make_plot(sig_lung_snyder, cor_sig_lung_snyder, high_col, "Lung cancer cfDNA") # Snyder et al 2016
+p_sig_25yo        <- make_plot(sig_25yo,        cor_sig_25yo,        mut_col, "Healthy 25yo cfDNA") # Teo et al 2018
+p_sig_70yo        <- make_plot(sig_70yo,        cor_sig_70yo,        mut_col, "Healthy 70yo cfDNA") # Teo et al 2018
+p_sig_bcell       <- make_plot(sig_bcell,       cor_sig_bcell,       mut_col, "B cell MNase-seq") # Gaffney et al 2012
 
 multi_panel_sig <- plot_grid(p_sig_lung_ma, p_sig_lung_snyder, p_sig_25yo, p_sig_70yo, p_sig_bcell,
-                             ncol = 3, labels = c("A", "B", "C", "D", "E"))
+                             ncol = 3)
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_all_maps_sig6samples.pdf"),
        multi_panel_sig, width = 10, height = 6)
@@ -297,29 +305,38 @@ make_diff_plot <- function(dt, cor_result, colour, title) {
     geom_point(alpha = 0.2, size = 0.8, colour = "grey40") +
     geom_smooth(method = "lm", colour = colour, se = TRUE) +
     geom_hline(yintercept = 0, linetype = "dashed", colour = "grey60") +
-    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
     annotate("text", x = Inf, y = Inf, hjust = 1.1, vjust = 1.5,
              label = paste0("rho = ", round(cor_result$estimate, 3),
-                            "\np = ", format(cor_result$p.value, scientific = FALSE, digits = 2),
-                            "\nn = ", sum(!is.na(dt$occ_diff))),
+                            "\np = ", format_p(cor_result$p.value)),
              size = 5) +
     labs(x = "Nucleosome occupancy difference",
-         y = "Mean CCF z-score across timepoints",
+         y = "Mean CCF z-score", # across timepoints
          title = title) +
     theme_cowplot(font_size = 14)
 }
 
-p_diff_ma <- make_diff_plot(mut_diff_ma, cor_diff_ma, "#D7191C",
-                            "Tumour-specific occupancy\n (Ma et al. 2017 - Teo 70yo)")
-p_diff_snyder <- make_diff_plot(mut_diff_snyder, cor_diff_snyder, "#FD8D3C",
-                                "Tumour-specific occupancy\n (Snyder et al. 2016 - Teo 70yo)")
+p_diff_ma <- make_diff_plot(mut_diff_ma, cor_diff_ma, low_col, "Tumour-specific")
+p_diff_snyder <- make_diff_plot(mut_diff_snyder, cor_diff_snyder, low_col, "Tumour-specific")
 
 multi_diff <- plot_grid(p_diff_ma, p_diff_snyder, ncol = 2, labels = c("A", "B"))
 
 ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occ_diff_lung_healthy70.pdf"),
        multi_diff, width = 10, height = 6)
 
-cat("Analysis complete.\n")
+
+
+# ===================== Final figure with all 7 subplots =====================
+row1 <- plot_grid(p_25yo, p_70yo, p_bcell, ncol = 3)
+row2 <- plot_grid(p_lung_ma, p_lung_snyder, NULL, ncol = 3)
+row3 <- plot_grid(p_diff_ma, p_diff_snyder, NULL, ncol = 3)
+
+multi_panel <- plot_grid(row1, row2, row3, ncol = 1)
+
+ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_all_maps.pdf"),
+       multi_panel, width = 12, height = 16)
+ggsave(paste0(outputs.folder, "ccf_zscore_vs_nuc_occupancy_all_maps.svg"),
+       multi_panel, width = 12, height = 16)
+
 
 
 

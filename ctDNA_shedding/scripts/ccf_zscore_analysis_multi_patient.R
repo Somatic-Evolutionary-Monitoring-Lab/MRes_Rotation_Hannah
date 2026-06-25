@@ -55,6 +55,22 @@ ctDNA_data_path <- "data/20260307_tracked_mutations_primary_and_met_data_eclipse
 # Read in table
 ctDNA_data <- read_fst(ctDNA_data_path)
 
+# Load the LTX to CRUK conversion table
+publication_key <- read.delim("data/tracerxPublicationKey_170221.txt", stringsAsFactors = FALSE)
+
+publication_key_min <- publication_key %>%
+  mutate(
+    ShorterID = paste0(
+      "LTX",
+      sprintf("%03d", as.numeric(sub("^LTX0*", "", SampleID)))
+    )
+  )
+
+# Convert patient ID to CRUK ID
+ctDNA_data <- ctDNA_data %>%
+  left_join(publication_key_min, by = c("patient" = "ShorterID")) %>%
+  mutate(patient = PublicationID) %>%
+  select(-PublicationID)
 
 #######################################################
 #### Filter data to keep clonal high ppm mutations ####
@@ -142,13 +158,13 @@ patient_plots <- lapply(top10_patients, function(pat) {
   sample_plots <- lapply(samples, function(samp) {
     samp_data <- pat_data %>% filter(sample == samp)
     
-    samp_label <- paste0(unique(samp_data$days_post_surgery), " days post surgery")
+    samp_label <- paste0(unique(samp_data$days_post_surgery), " days")
     
     ggplot(samp_data, aes(x = ccf_z_score)) +
       geom_histogram(binwidth = 0.3, fill = scatter_col, colour = "white", alpha = 0.8) +
       geom_vline(xintercept = 0, linetype = "dashed", colour = wt_col) +
       xlim(-3, 3) +
-      theme_cowplot(font_size = 12) +
+      theme_cowplot(font_size = 14) +
       labs(x = "CCF z-score", y = "Count", title = samp_label)
   })
   
@@ -162,7 +178,7 @@ patient_plots <- lapply(top10_patients, function(pat) {
   
   row   <- plot_grid(plotlist = sample_plots, nrow = 1)
   title <- ggdraw() + draw_label(paste0("Patient ", pat),
-                                 fontface = "bold", x = 0.01, hjust = 0, size = 14)
+                                 fontface = "bold", x = 0.01, hjust = 0, size = 16)
   plot_grid(title, row, ncol = 1, rel_heights = c(0.1, 1))
 })
 
@@ -409,7 +425,8 @@ ctDNA_data_pos_multiple_violin$patient <- as.factor(ctDNA_data_pos_multiple_viol
 
 # Plot only for patients with 6 samples (for now)
 ctDNA_data_pos_multiple_violin_6_samples <- ctDNA_data_pos_multiple_violin %>% 
-  filter(patient %in% c("LTX208", "LTX287", "LTX854"))
+  # filter(patient %in% c("LTX208", "LTX287", "LTX854"))
+  filter(patient %in% c("CRUK0235", "CRUK0286", "CRUK0840"))
 
 # Compute the Wilcoxon signed-rank test per mutation to test whether its 
 # CCF z-scores are systematically different from 0 across all 6 samples

@@ -21,6 +21,7 @@
 # Date: 2026-04-22
 
 setwd("/Volumes/RFS/rfs-kh_rfs-rDsHEAv2WP0/hannah/MRes_Rotation_Hannah/ctDNA_shedding/")
+source("scripts/plot_theme_mres_frankell.R")
 
 # -----------------------------------------------------------------------------
 # Source required functions & load libraries
@@ -37,6 +38,7 @@ library(tidyr)
 library(GenomicRanges)
 library(ggpubr)
 library(readr)
+library(svglite)
 
 # -----------------------------------------------------------------------------
 # Make a folder for this analysis run
@@ -180,17 +182,16 @@ plot_atac_boxplot <- function(ctDNA_data, peak_col, cancer_type, save_path) {
   p <- ggplot(ctDNA_data, aes(x = .data[[peak_col]], y = ccf_z_score, 
                               fill = .data[[peak_col]])) +
     geom_boxplot(outlier.alpha = 0.2) +
-    stat_compare_means(method = "wilcox.test", label.x = 1.3) +
+    scale_fill_manual(values = c("FALSE" = low_col, "TRUE" = high_col)) +
+    stat_compare_means(method = "wilcox.test", label = "p.format", label.x = 1.3) +
     labs(
       x = paste("Mutation in", cancer_type, "ATAC-seq peak"),
-      y = "CCF z-score (ctDNA shedding)",
-      title = paste("ctDNA shedding: in vs outside open chromatin -", cancer_type)
-    ) +
-    theme_cowplot() +
-    theme(legend.position = "none",
-          plot.title = element_text(size = 10))
+      y = "CCF z-score") +
+    theme_cowplot(font_size = 20) +
+    theme(legend.position = "none")
   print(p)
   ggsave(paste0(save_path, "/atac_boxplot_", cancer_type, ".pdf"), p, width = 6, height = 6)
+  ggsave(paste0(save_path, "/atac_boxplot_", cancer_type, ".svg"), p, width = 6, height = 6)
   
   # Statistical test
   formula <- as.formula(paste("ccf_z_score ~", peak_col))
